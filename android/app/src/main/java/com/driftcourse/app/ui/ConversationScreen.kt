@@ -590,7 +590,7 @@ private fun MessageBubbleLocal(
     val borderMod = if (selected) {
         Modifier.border(
             width = 2.dp,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.secondary,
             shape = shape,
         )
     } else Modifier
@@ -669,7 +669,7 @@ private fun NoteListLocal(
                 )
             }
             val borderMod = if (selected) {
-                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+                Modifier.border(2.dp, MaterialTheme.colorScheme.secondary, shape)
             } else Modifier
             Box(
                 modifier = Modifier
@@ -853,7 +853,7 @@ private fun NoteSidedListLocal(
                 )
             }
             val borderMod = if (selected) {
-                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+                Modifier.border(2.dp, MaterialTheme.colorScheme.secondary, shape)
             } else Modifier
             Column(
                 modifier = Modifier
