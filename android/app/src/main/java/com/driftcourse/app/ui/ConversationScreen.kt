@@ -436,8 +436,16 @@ private fun ActionSheet(
 ) {
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            TextButton(
+                onClick = {
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(target.content))
+                    scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("コピー") }
             TextButton(
                 onClick = {
                     scope.launch { sheetState.hide() }.invokeOnCompletion { onEdit() }

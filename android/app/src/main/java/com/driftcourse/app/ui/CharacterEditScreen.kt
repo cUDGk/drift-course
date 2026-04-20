@@ -43,8 +43,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.driftcourse.app.net.Conversation
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 
-private val STRUCTURED_KEYS = setOf("gender", "user_address", "description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon")
+private val STRUCTURED_KEYS = setOf("gender", "user_address", "description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon", "max_tokens")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +81,7 @@ fun CharacterEditScreen(
     var mesExample by remember { mutableStateOf(initialDraft?.mes_example.orEmpty()) }
     var memoryText by remember { mutableStateOf(initialDraft?.memory.orEmpty()) }
     var icon by remember { mutableStateOf(initialDraft?.icon.orEmpty()) }
+    var maxTokensText by remember { mutableStateOf("1024") }
     var originalCard by remember { mutableStateOf(JsonObject(emptyMap())) }
     var hydrated by remember { mutableStateOf(characterId == null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -105,6 +107,9 @@ fun CharacterEditScreen(
             mesExample = readCardString(c.card, "mes_example")
             memoryText = readCardString(c.card, "memory")
             icon = readCardString(c.card, "icon")
+            // max_tokens は数値で保持。未設定 or 0 以下は 1024 のデフォ表示に戻す。
+            maxTokensText = (c.card["max_tokens"] as? kotlinx.serialization.json.JsonPrimitive)
+                ?.intOrNull?.takeIf { it > 0 }?.toString() ?: "1024"
             hydrated = true
         }
     }
@@ -263,10 +268,19 @@ fun CharacterEditScreen(
                     .heightIn(min = 140.dp),
             )
 
+            OutlinedTextField(
+                value = maxTokensText,
+                onValueChange = { v -> maxTokensText = v.filter { it.isDigit() }.take(6) },
+                label = { Text("AI 応答の最大トークン数 (目安: 1024、長文返答なら 2048〜)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val card = mergeCard(originalCard, gender, userAddress, description, personality, scenario, firstMes, mesExample, memoryText, icon)
+                        val maxTokens = maxTokensText.toIntOrNull()?.coerceIn(16, 32768) ?: 1024
+                        val card = mergeCard(originalCard, gender, userAddress, description, personality, scenario, firstMes, mesExample, memoryText, icon, maxTokens)
                         if (characterId == null) {
                             vm.create(name.trim(), systemPrompt, card) { onBack() }
                         } else {
@@ -367,6 +381,7 @@ private fun mergeCard(
     mesExample: String,
     memory: String,
     icon: String,
+    maxTokens: Int,
 ): JsonObject {
     val merged = LinkedHashMap<String, kotlinx.serialization.json.JsonElement>()
     original.forEach { (k, v) ->
@@ -378,6 +393,7 @@ private fun mergeCard(
     if (personality.isNotEmpty()) merged["personality"] = JsonPrimitive(personality)
     if (scenario.isNotEmpty()) merged["scenario"] = JsonPrimitive(scenario)
     if (firstMes.isNotEmpty()) merged["first_mes"] = JsonPrimitive(firstMes)
+    merged["max_tokens"] = JsonPrimitive(maxTokens)
     if (mesExample.isNotEmpty()) merged["mes_example"] = JsonPrimitive(mesExample)
     if (memory.isNotEmpty()) merged["memory"] = JsonPrimitive(memory)
     if (icon.isNotEmpty()) merged["icon"] = JsonPrimitive(icon)
