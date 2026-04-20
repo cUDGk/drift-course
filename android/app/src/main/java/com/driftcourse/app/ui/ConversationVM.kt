@@ -4,8 +4,10 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.driftcourse.app.cache.LocalCache
 import com.driftcourse.app.net.Conversation
 import com.driftcourse.app.net.DriftApi
+import com.driftcourse.app.net.Message
 import com.driftcourse.app.net.PostMessage
 import com.driftcourse.app.net.SseClient
 import com.driftcourse.app.settings.SettingsStore
@@ -18,6 +20,7 @@ import kotlinx.coroutines.launch
 
 class ConversationVM(app: Application) : AndroidViewModel(app) {
     private val settings = SettingsStore(app)
+    private val cache = LocalCache(app.applicationContext)
     private var currentUrl = ""
     private var currentToken = ""
     private val api = DriftApi(
@@ -65,23 +68,40 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
         if (convId == id && _messages.value.isNotEmpty()) return
         convId = id
         viewModelScope.launch {
+            // キャッシュから先に表示 (オフラインでも履歴閲覧可能)。
+            val cached = cache.readMessages(id)
+            if (cached.isNotEmpty()) {
+                _messages.value = cached.map { UiMessage(it.role, it.content, it.id) }
+            }
+            val cachedChar = cache.readCharacters().firstOrNull { c ->
+                cache.readConversations().firstOrNull { it.id == id }?.characterId == c.id
+            }
+            if (cachedChar != null) {
+                _characterName.value = cachedChar.name
+                _iconDataUrl.value = readCardString(cachedChar.card, "icon").ifBlank { null }
+            }
+
             refreshCfg()
             _error.value = null
             try {
                 val conv = api.getConversation(id)
                 _conversation.value = conv
-                _messages.value = api.listMessages(id).map { UiMessage(it.role, it.content, it.id) }
+                val msgs = api.listMessages(id)
+                _messages.value = msgs.map { UiMessage(it.role, it.content, it.id) }
+                cache.writeMessages(id, msgs)
                 try {
                     val c = api.getCharacter(conv.characterId)
                     _characterName.value = c.name
                     _iconDataUrl.value = readCardString(c.card, "icon").ifBlank { null }
                 } catch (t: Throwable) {
-                    // ノート表示のラベル用途 + アバター用途。失敗しても本機能は損なわない。
                     Log.w("ConversationVM", "getCharacter failed (label/avatar only)", t)
                 }
             } catch (t: Throwable) {
                 Log.e("ConversationVM", "load failed", t)
-                _error.value = t.message ?: "読み込みに失敗しました"
+                // キャッシュ表示済みならエラーを出さない。ゼロからなら出す。
+                if (_messages.value.isEmpty()) {
+                    _error.value = t.message ?: "読み込みに失敗しました"
+                }
             }
         }
     }
@@ -177,6 +197,7 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
         try {
             val fresh = api.listMessages(id)
             _messages.value = fresh.map { UiMessage(it.role, it.content, it.id) }
+            cache.writeMessages(id, fresh)
         } catch (t: Throwable) {
             Log.w("ConversationVM", "refreshMessageIds failed", t)
         }

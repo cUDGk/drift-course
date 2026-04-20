@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.driftcourse.app.cache.LocalCache
 import com.driftcourse.app.net.Character
 import com.driftcourse.app.net.Conversation
 import com.driftcourse.app.net.DriftApi
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 
 class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
     private val settings = SettingsStore(app)
+    private val cache = LocalCache(app.applicationContext)
     private var currentUrl = ""
     private var currentToken = ""
     private val api = DriftApi(
@@ -47,6 +49,11 @@ class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
                 currentToken = it.token
             }
         }
+        // 起動直後にキャッシュ表示。フェッチ成功で上書き。
+        viewModelScope.launch {
+            _conversations.value = cache.readConversations().sortedByDescending { it.updatedAt }
+            _charactersById.value = cache.readCharacters().associateBy { it.id }
+        }
     }
 
     fun reload() {
@@ -59,17 +66,20 @@ class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
             _loading.value = true
             _error.value = null
             try {
-                _conversations.value = api.listConversations().sortedByDescending { it.updatedAt }
+                val convs = api.listConversations().sortedByDescending { it.updatedAt }
+                _conversations.value = convs
+                cache.writeConversations(convs)
                 // アバター表示用。characters は通常数十件程度なので 1 回の GET で OK。
-                // 失敗してもメイン機能は損なわないので握り潰す (エラーは個別ログのみ)。
                 try {
-                    _charactersById.value = api.listCharacters().associateBy { it.id }
+                    val chars = api.listCharacters()
+                    _charactersById.value = chars.associateBy { it.id }
+                    cache.writeCharacters(chars)
                 } catch (t: Throwable) {
                     Log.w("ConversationsHomeVM", "listCharacters failed (avatar only)", t)
                 }
             } catch (t: Throwable) {
                 Log.e("ConversationsHomeVM", "listConversations failed", t)
-                _error.value = t.message ?: "読み込みに失敗しました"
+                _error.value = t.message ?: "読み込みに失敗しました (キャッシュ表示中)"
             } finally {
                 _loading.value = false
             }
@@ -106,7 +116,10 @@ class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
             _error.value = null
             try {
                 api.deleteConversation(id)
-                _conversations.value = _conversations.value.filterNot { it.id == id }
+                val updated = _conversations.value.filterNot { it.id == id }
+                _conversations.value = updated
+                cache.writeConversations(updated)
+                cache.deleteMessages(id)
             } catch (t: Throwable) {
                 Log.e("ConversationsHomeVM", "delete failed", t)
                 _error.value = t.message ?: "削除に失敗しました"
