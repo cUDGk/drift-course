@@ -54,7 +54,10 @@ fun CharacterListScreen(
 
     LaunchedEffect(Unit) { vm.reload() }
 
+    val bg = rememberSettingsBackground()
+    AppBackground(bg = bg) {
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("モデル一覧", fontWeight = FontWeight.SemiBold) },
@@ -103,6 +106,7 @@ fun CharacterListScreen(
                 }
             }
         }
+    }
     }
 }
 

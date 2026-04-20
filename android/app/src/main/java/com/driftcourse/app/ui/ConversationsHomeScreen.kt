@@ -63,7 +63,10 @@ fun ConversationsHomeScreen(
 
     LaunchedEffect(Unit) { vm.reload() }
 
+    val bg = rememberSettingsBackground()
+    AppBackground(bg = bg) {
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("DriftCourse", fontWeight = FontWeight.SemiBold) },
@@ -121,6 +124,7 @@ fun ConversationsHomeScreen(
                 }
             }
         }
+    }
     }
 }
 

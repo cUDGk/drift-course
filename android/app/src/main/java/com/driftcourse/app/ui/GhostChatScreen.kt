@@ -1,6 +1,5 @@
 package com.driftcourse.app.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,10 +63,11 @@ fun GhostChatScreen(
 
     LaunchedEffect(modelId) { vm.load(modelId) }
 
+    val bg = rememberSettingsBackground()
+    AppBackground(bg = bg) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding(),
     ) {
         TopAppBar(
@@ -132,6 +132,7 @@ fun GhostChatScreen(
             onSend = vm::send,
             onCancel = vm::cancel,
         )
+    }
     }
 }
 

@@ -85,10 +85,11 @@ fun ConversationScreen(
     var menuFor by remember { mutableStateOf<UiMessage?>(null) }
     var editFor by remember { mutableStateOf<EditTarget?>(null) }
 
+    val bg = rememberSettingsBackground()
+    AppBackground(bg = bg) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding(),
     ) {
         TopAppBar(
@@ -175,6 +176,7 @@ fun ConversationScreen(
             onSend = vm::send,
             onCancel = vm::cancel,
         )
+    }
     }
 
     // 長押しメニュー。
@@ -316,7 +318,9 @@ private fun MessageListLocal(
     }
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .scrollCaptureProvider(lazyListState = listState, itemCount = messages.size),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -395,7 +399,9 @@ private fun NoteListLocal(
     }
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .scrollCaptureProvider(lazyListState = listState, itemCount = messages.size),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {

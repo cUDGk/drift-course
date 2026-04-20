@@ -66,7 +66,10 @@ fun ModelDetailScreen(
 
     LaunchedEffect(modelId) { vm.load(modelId) }
 
+    val bg = rememberSettingsBackground()
+    AppBackground(bg = bg) {
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -209,6 +212,7 @@ fun ModelDetailScreen(
                 }
             }
         }
+    }
     }
 }
 
