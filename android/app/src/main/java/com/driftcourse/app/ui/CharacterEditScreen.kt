@@ -54,7 +54,7 @@ private val RESPONSE_STYLE_PRESETS = listOf(
     "会話主体" to "ナレーションは極力省き、セリフ中心で返す。地の文は短く。",
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun CharacterEditScreen(
     characterId: String?,
