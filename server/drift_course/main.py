@@ -7,8 +7,9 @@ import httpx
 from fastapi import FastAPI
 
 from .config import Settings, ensure_token
+from .db import Database
 from .llama_proc import LlamaServer
-from .routes import chat, health, models
+from .routes import characters, chat, conversations, health, models
 
 log = logging.getLogger(__name__)
 
@@ -17,11 +18,13 @@ log = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     settings = Settings()
     token = ensure_token(settings)
+    db = Database(settings.db_path)
     llama = LlamaServer(settings)
     http = httpx.AsyncClient()
 
     app.state.settings = settings
     app.state.token = token
+    app.state.db = db
     app.state.llama = llama
     app.state.http = http
 
@@ -32,6 +35,7 @@ async def lifespan(app: FastAPI):
     finally:
         await llama.stop()
         await http.aclose()
+        db.close()
 
 
 def create_app() -> FastAPI:
@@ -39,6 +43,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="DriftCourse", version="0.1.0", lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(models.router)
+    app.include_router(characters.router)
+    app.include_router(conversations.router)
     app.include_router(chat.router)
     return app
 
