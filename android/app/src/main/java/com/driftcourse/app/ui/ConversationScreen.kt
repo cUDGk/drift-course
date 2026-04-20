@@ -11,6 +11,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,8 +40,12 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -47,6 +53,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,11 +77,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,6 +120,22 @@ fun ConversationScreen(
     var menuFor by remember { mutableStateOf<UiMessage?>(null) }
     var editFor by remember { mutableStateOf<EditTarget?>(null) }
 
+    // 範囲画像保存モード。index ベースで [start..end] の連続範囲 (end >= start) を保持。
+    var selectionMode by remember { mutableStateOf(false) }
+    var selStart by remember { mutableStateOf<Int?>(null) }
+    var selEnd by remember { mutableStateOf<Int?>(null) }
+    var exporting by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val config = LocalConfiguration.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 画面のテーマが dark かどうか。設定経由 (SYSTEM/LIGHT/DARK) の最終解決は MainActivity がしているので
+    // ここは現在の MaterialTheme の明暗だけ見て判断する。
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
     val bg = rememberSettingsBackground()
     AppBackground(bg = bg) {
     Column(
@@ -115,49 +145,119 @@ fun ConversationScreen(
     ) {
         TopAppBar(
             title = {
-                Column {
+                if (selectionMode) {
                     Text(
-                        conversation?.title?.ifBlank { "(無題)" } ?: "…",
+                        "画像保存: 範囲を選択",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDotLocal(streaming = streaming, hasError = error != null)
-                        Spacer(Modifier.width(6.dp))
+                } else {
+                    Column {
                         Text(
-                            text = when {
-                                error != null -> "エラー"
-                                streaming -> "生成中…"
-                                else -> "待機中"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            conversation?.title?.ifBlank { "(無題)" } ?: "…",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                         )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            StatusDotLocal(streaming = streaming, hasError = error != null)
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = when {
+                                    error != null -> "エラー"
+                                    streaming -> "生成中…"
+                                    else -> "待機中"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                if (selectionMode) {
+                    IconButton(onClick = {
+                        selectionMode = false
+                        selStart = null
+                        selEnd = null
+                    }) {
+                        Icon(Icons.Default.Close, contentDescription = "キャンセル")
+                    }
+                } else {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                    }
                 }
             },
             actions = {
-                IconButton(onClick = {
-                    displayMode = when (displayMode) {
-                        DisplayMode.CHAT -> DisplayMode.NOTE_SIDED
-                        DisplayMode.NOTE_SIDED -> DisplayMode.NOTE_FLAT
-                        DisplayMode.NOTE_FLAT -> DisplayMode.CHAT
+                if (selectionMode) {
+                    val canConfirm = selStart != null && selEnd != null && !exporting
+                    IconButton(
+                        enabled = canConfirm,
+                        onClick = {
+                            val s = selStart ?: return@IconButton
+                            val e = selEnd ?: return@IconButton
+                            val lo = minOf(s, e)
+                            val hi = maxOf(s, e)
+                            val slice = messages.subList(
+                                lo.coerceAtLeast(0),
+                                (hi + 1).coerceAtMost(messages.size),
+                            ).toList()
+                            if (slice.isEmpty()) return@IconButton
+                            exporting = true
+                            val widthPx = with(density) { config.screenWidthDp.dp.toPx() }.toInt()
+                            scope.launch {
+                                val ok = runCatching {
+                                    val bmp = renderMessagesToBitmap(
+                                        context = context,
+                                        messages = slice,
+                                        widthPx = widthPx,
+                                        darkTheme = isDark,
+                                    )
+                                    val uri = withContext(Dispatchers.IO) {
+                                        saveBitmapToPictures(context, bmp)
+                                    }
+                                    uri != null
+                                }.getOrDefault(false)
+                                exporting = false
+                                if (ok) {
+                                    selectionMode = false
+                                    selStart = null
+                                    selEnd = null
+                                    snackbarHostState.showSnackbar("画像を保存しました")
+                                } else {
+                                    snackbarHostState.showSnackbar("保存に失敗しました")
+                                }
+                            }
+                        },
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = "決定")
                     }
-                }) {
-                    // 次に切り替わるモードのアイコンを表示する。
-                    when (displayMode) {
-                        DisplayMode.CHAT -> Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = "枠なし (左右) 表示")
-                        DisplayMode.NOTE_SIDED -> Icon(Icons.Default.Article, contentDescription = "ノート (左寄せ) 表示")
-                        DisplayMode.NOTE_FLAT -> Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "チャット表示")
+                } else {
+                    IconButton(onClick = {
+                        displayMode = when (displayMode) {
+                            DisplayMode.CHAT -> DisplayMode.NOTE_SIDED
+                            DisplayMode.NOTE_SIDED -> DisplayMode.NOTE_FLAT
+                            DisplayMode.NOTE_FLAT -> DisplayMode.CHAT
+                        }
+                    }) {
+                        // 次に切り替わるモードのアイコンを表示する。
+                        when (displayMode) {
+                            DisplayMode.CHAT -> Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = "枠なし (左右) 表示")
+                            DisplayMode.NOTE_SIDED -> Icon(Icons.Default.Article, contentDescription = "ノート (左寄せ) 表示")
+                            DisplayMode.NOTE_FLAT -> Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "チャット表示")
+                        }
                     }
-                }
-                IconButton(onClick = { onOpenMemory(conversationId) }) {
-                    Icon(Icons.Default.Memory, contentDescription = "記憶")
+                    IconButton(onClick = {
+                        selectionMode = true
+                        selStart = null
+                        selEnd = null
+                    }) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = "範囲を画像で保存")
+                    }
+                    IconButton(onClick = { onOpenMemory(conversationId) }) {
+                        Icon(Icons.Default.Memory, contentDescription = "記憶")
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -187,17 +287,29 @@ fun ConversationScreen(
                 DisplayMode.NOTE_FLAT -> NoteListLocal(
                     messages = messages,
                     modelName = characterName,
-                    onLongPress = { msg -> menuFor = msg },
+                    onLongPress = { msg -> if (!selectionMode) menuFor = msg },
+                    selectionMode = selectionMode,
+                    selStart = selStart,
+                    selEnd = selEnd,
+                    onItemTap = { idx -> onSelectTap(idx, selStart, selEnd) { a, b -> selStart = a; selEnd = b } },
                 )
                 DisplayMode.NOTE_SIDED -> NoteSidedListLocal(
                     messages = messages,
                     modelName = characterName,
-                    onLongPress = { msg -> menuFor = msg },
+                    onLongPress = { msg -> if (!selectionMode) menuFor = msg },
+                    selectionMode = selectionMode,
+                    selStart = selStart,
+                    selEnd = selEnd,
+                    onItemTap = { idx -> onSelectTap(idx, selStart, selEnd) { a, b -> selStart = a; selEnd = b } },
                 )
                 DisplayMode.CHAT -> MessageListLocal(
                     messages = messages,
                     streaming = streaming,
-                    onLongPress = { msg -> menuFor = msg },
+                    onLongPress = { msg -> if (!selectionMode) menuFor = msg },
+                    selectionMode = selectionMode,
+                    selStart = selStart,
+                    selEnd = selEnd,
+                    onItemTap = { idx -> onSelectTap(idx, selStart, selEnd) { a, b -> selStart = a; selEnd = b } },
                 )
             }
 
@@ -206,13 +318,46 @@ fun ConversationScreen(
                 iconDataUrl = iconDataUrl,
                 fallbackName = characterName,
             )
+
+            if (exporting) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 4.dp,
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.size(12.dp))
+                            Text("画像を生成中…", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+            ) { data ->
+                Snackbar(snackbarData = data)
+            }
         }
 
-        ComposerLocal(
-            streaming = streaming,
-            onSend = vm::send,
-            onCancel = vm::cancel,
-        )
+        if (!selectionMode) {
+            ComposerLocal(
+                streaming = streaming,
+                onSend = vm::send,
+                onCancel = vm::cancel,
+            )
+        }
     }
     }
 
@@ -248,6 +393,35 @@ fun ConversationScreen(
             },
         )
     }
+}
+
+/**
+ * 連続範囲選択のタップ処理。
+ * - どちらも未設定 → start 設定
+ * - start のみ設定 → end 設定 (start 以下なら逆転)
+ * - 既に両方設定済み → end を上書き (範囲を拡大/縮小)
+ * シンプルな UX に倒していて、「範囲外をタップしたらリセット」とか「中抜け対応」は入れない。
+ */
+private inline fun onSelectTap(
+    idx: Int,
+    start: Int?,
+    end: Int?,
+    apply: (Int?, Int?) -> Unit,
+) {
+    when {
+        start == null -> apply(idx, null)
+        end == null -> apply(start, idx)
+        else -> apply(start, idx)
+    }
+}
+
+private fun isIndexSelected(idx: Int, start: Int?, end: Int?): Boolean {
+    if (start == null) return false
+    val s = start
+    val e = end ?: start
+    val lo = minOf(s, e)
+    val hi = maxOf(s, e)
+    return idx in lo..hi
 }
 
 private data class EditTarget(val msg: UiMessage, val branch: Boolean)
@@ -346,10 +520,14 @@ private fun MessageListLocal(
     messages: List<UiMessage>,
     streaming: Boolean,
     onLongPress: (UiMessage) -> Unit,
+    selectionMode: Boolean,
+    selStart: Int?,
+    selEnd: Int?,
+    onItemTap: (Int) -> Unit,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
-        if (messages.isNotEmpty()) {
+        if (messages.isNotEmpty() && !selectionMode) {
             listState.animateScrollToItem(messages.lastIndex)
         }
     }
@@ -361,8 +539,16 @@ private fun MessageListLocal(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(messages) { msg ->
-            MessageBubbleLocal(msg = msg, streaming = streaming, onLongPress = onLongPress)
+        items(messages.size) { idx ->
+            val msg = messages[idx]
+            MessageBubbleLocal(
+                msg = msg,
+                streaming = streaming,
+                onLongPress = onLongPress,
+                selectionMode = selectionMode,
+                selected = isIndexSelected(idx, selStart, selEnd),
+                onSelectTap = { onItemTap(idx) },
+            )
         }
     }
 }
@@ -373,6 +559,9 @@ private fun MessageBubbleLocal(
     msg: UiMessage,
     streaming: Boolean,
     onLongPress: (UiMessage) -> Unit,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onSelectTap: () -> Unit,
 ) {
     val isUser = msg.role == "user"
     val shape = if (isUser) {
@@ -386,7 +575,25 @@ private fun MessageBubbleLocal(
              else MaterialTheme.colorScheme.onSurface
 
     // 長押しで編集/分岐メニュー。id が無い (ローカルのみの placeholder) 場合は無効化。
-    val longPressEnabled = msg.id != null
+    // 選択モード中は長押しを殺し、タップで選択を切替える。
+    val longPressEnabled = msg.id != null && !selectionMode
+
+    val interaction = if (selectionMode) {
+        Modifier.clickable(onClick = onSelectTap)
+    } else {
+        Modifier.combinedClickable(
+            enabled = longPressEnabled,
+            onClick = {},
+            onLongClick = { onLongPress(msg) },
+        )
+    }
+    val borderMod = if (selected) {
+        Modifier.border(
+            width = 2.dp,
+            color = MaterialTheme.colorScheme.primary,
+            shape = shape,
+        )
+    } else Modifier
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -397,13 +604,9 @@ private fun MessageBubbleLocal(
             color = bg,
             contentColor = fg,
             modifier = Modifier
-                // 内容に応じて幅が変わる (短い発言ほど端に寄る)。上限だけ指定。
                 .widthIn(max = 300.dp)
-                .combinedClickable(
-                    enabled = longPressEnabled,
-                    onClick = {},
-                    onLongClick = { onLongPress(msg) },
-                ),
+                .then(borderMod)
+                .then(interaction),
         ) {
             if (msg.content.isEmpty() && !isUser && streaming) {
                 Text(
@@ -428,10 +631,14 @@ private fun NoteListLocal(
     messages: List<UiMessage>,
     modelName: String,
     onLongPress: (UiMessage) -> Unit,
+    selectionMode: Boolean,
+    selStart: Int?,
+    selEnd: Int?,
+    onItemTap: (Int) -> Unit,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
-        if (messages.isNotEmpty()) {
+        if (messages.isNotEmpty() && !selectionMode) {
             listState.animateScrollToItem(messages.lastIndex)
         }
     }
@@ -443,20 +650,33 @@ private fun NoteListLocal(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        items(messages) { msg ->
+        items(messages.size) { idx ->
+            val msg = messages[idx]
             val label = if (msg.role == "user") "あなた" else (modelName.ifBlank { "モデル" })
             val body = buildString {
                 append("**").append(label).append("**\n\n")
                 append(msg.content)
             }
+            val selected = isIndexSelected(idx, selStart, selEnd)
+            val shape = RoundedCornerShape(8.dp)
+            val interaction = if (selectionMode) {
+                Modifier.clickable { onItemTap(idx) }
+            } else {
+                Modifier.combinedClickable(
+                    enabled = msg.id != null,
+                    onClick = {},
+                    onLongClick = { onLongPress(msg) },
+                )
+            }
+            val borderMod = if (selected) {
+                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+            } else Modifier
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .combinedClickable(
-                        enabled = msg.id != null,
-                        onClick = {},
-                        onLongClick = { onLongPress(msg) },
-                    ),
+                    .then(borderMod)
+                    .padding(4.dp)
+                    .then(interaction),
             ) {
                 MarkdownText(
                     text = body,
@@ -597,10 +817,14 @@ private fun NoteSidedListLocal(
     messages: List<UiMessage>,
     modelName: String,
     onLongPress: (UiMessage) -> Unit,
+    selectionMode: Boolean,
+    selStart: Int?,
+    selEnd: Int?,
+    onItemTap: (Int) -> Unit,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+        if (messages.isNotEmpty() && !selectionMode) listState.animateScrollToItem(messages.lastIndex)
     }
     LazyColumn(
         state = listState,
@@ -610,20 +834,33 @@ private fun NoteSidedListLocal(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(messages) { msg ->
+        items(messages.size) { idx ->
+            val msg = messages[idx]
             val isUser = msg.role == "user"
             val label = if (isUser) "あなた" else (modelName.ifBlank { "モデル" })
             val body = buildString {
                 append("**").append(label).append("**\n\n").append(msg.content)
             }
+            val selected = isIndexSelected(idx, selStart, selEnd)
+            val shape = RoundedCornerShape(8.dp)
+            val interaction = if (selectionMode) {
+                Modifier.clickable { onItemTap(idx) }
+            } else {
+                Modifier.combinedClickable(
+                    enabled = msg.id != null,
+                    onClick = {},
+                    onLongClick = { onLongPress(msg) },
+                )
+            }
+            val borderMod = if (selected) {
+                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+            } else Modifier
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .combinedClickable(
-                        enabled = msg.id != null,
-                        onClick = {},
-                        onLongClick = { onLongPress(msg) },
-                    ),
+                    .then(borderMod)
+                    .padding(4.dp)
+                    .then(interaction),
                 horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
             ) {
                 Box(modifier = Modifier.widthIn(max = 320.dp)) {
@@ -634,3 +871,8 @@ private fun NoteSidedListLocal(
     }
 }
 
+/** 色の輝度。ダークテーマ判定用の軽量ヘルパー。 */
+private fun Color.luminance(): Float {
+    // 近似。厳密な sRGB 線形化は不要 (薄暗いか明るいかの 2 分類で使うだけ)。
+    return (red * 0.2126f + green * 0.7152f + blue * 0.0722f)
+}

@@ -1,6 +1,8 @@
 package com.driftcourse.app
 
+import android.os.Build
 import android.os.Bundle
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,17 +26,32 @@ import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.driftcourse.app.settings.SettingsStore
 import com.driftcourse.app.settings.ThemeMode
+import com.driftcourse.app.ui.DecorScrollCaptureCallback
 import com.driftcourse.app.ui.DriftCourseApp
 import com.driftcourse.app.ui.theme.DriftCourseTheme
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+    private var decorCaptureCallback: DecorScrollCaptureCallback? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // システムスプラッシュ本体 (透明アイコン + グレー背景) を有効化。
         // installSplashScreen は super.onCreate より先に呼ぶ必要がある。
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Xiaomi HyperOS 系は ComposeView に setScrollCaptureCallback しても
+        // 降りて来ない事があるので、decorView に直接コールバックを差す。
+        // target は画面側が ActiveScrollCapture.target に登録 → ここは薄い delegate。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val decor = window.decorView
+            val cb = DecorScrollCaptureCallback(decor)
+            decor.setScrollCaptureCallback(cb)
+            decor.scrollCaptureHint = View.SCROLL_CAPTURE_HINT_INCLUDE
+            // スクロールヒューリスティックで候補に挙がり易くする。
+            decor.isScrollContainer = true
+            decorCaptureCallback = cb
+        }
         setContent {
             val ctx = LocalContext.current
             val store = remember { SettingsStore(ctx.applicationContext) }
@@ -73,5 +90,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching { window.decorView.setScrollCaptureCallback(null) }
+            decorCaptureCallback?.dispose()
+            decorCaptureCallback = null
+        }
+        super.onDestroy()
     }
 }
