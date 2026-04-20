@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -109,16 +110,31 @@ fun ModelDetailScreen(
             ) {
                 val c = character
                 if (c != null) {
-                    Text(
-                        "対話数: ${conversations.size}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "最終更新: ${formatEpochSeconds(c.updatedAt)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ModelAvatar(
+                            iconDataUrl = readCardString(c.card, "icon"),
+                            fallbackName = c.name,
+                            size = 80.dp,
+                        )
+                        Spacer(Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                c.name.ifBlank { "(名前なし)" },
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "対話数: ${conversations.size}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                "最終更新: ${formatEpochSeconds(c.updatedAt)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
 
                 Spacer(Modifier.padding(vertical = 4.dp))

@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.driftcourse.app.net.Character
 import com.driftcourse.app.net.Conversation
 import com.driftcourse.app.net.DriftApi
 import com.driftcourse.app.net.ensureDefaultCharacter
@@ -25,6 +26,10 @@ class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
 
     private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
     val conversations: StateFlow<List<Conversation>> = _conversations.asStateFlow()
+
+    // character_id → Character。アバター表示用に一覧ロード時にまとめて取得する。
+    private val _charactersById = MutableStateFlow<Map<String, Character>>(emptyMap())
+    val charactersById: StateFlow<Map<String, Character>> = _charactersById.asStateFlow()
 
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
@@ -55,6 +60,13 @@ class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
             _error.value = null
             try {
                 _conversations.value = api.listConversations().sortedByDescending { it.updatedAt }
+                // アバター表示用。characters は通常数十件程度なので 1 回の GET で OK。
+                // 失敗してもメイン機能は損なわないので握り潰す (エラーは個別ログのみ)。
+                try {
+                    _charactersById.value = api.listCharacters().associateBy { it.id }
+                } catch (t: Throwable) {
+                    Log.w("ConversationsHomeVM", "listCharacters failed (avatar only)", t)
+                }
             } catch (t: Throwable) {
                 Log.e("ConversationsHomeVM", "listConversations failed", t)
                 _error.value = t.message ?: "読み込みに失敗しました"

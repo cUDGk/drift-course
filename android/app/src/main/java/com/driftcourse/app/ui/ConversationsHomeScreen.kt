@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -38,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.driftcourse.app.net.Character
 import com.driftcourse.app.net.Conversation
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,6 +52,7 @@ fun ConversationsHomeScreen(
     vm: ConversationsHomeVM = viewModel(),
 ) {
     val conversations by vm.conversations.collectAsStateWithLifecycle()
+    val charactersById by vm.charactersById.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
@@ -103,6 +108,7 @@ fun ConversationsHomeScreen(
                     items(conversations, key = { it.id }) { conv ->
                         ConversationHomeRow(
                             conv = conv,
+                            character = charactersById[conv.characterId],
                             onOpen = { onOpenConversation(conv.id) },
                             onDelete = { vm.delete(conv.id) },
                         )
@@ -139,6 +145,7 @@ private fun EmptyConversationsState() {
 @Composable
 private fun ConversationHomeRow(
     conv: Conversation,
+    character: Character?,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -152,17 +159,28 @@ private fun ConversationHomeRow(
                 onLongClick = { menuOpen = true },
             ),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(
-                conv.title.ifBlank { "(無題)" },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            ModelAvatar(
+                iconDataUrl = character?.card?.let { readCardString(it, "icon") },
+                fallbackName = character?.name.orEmpty(),
+                size = 32.dp,
             )
-            Text(
-                formatEpochSeconds(conv.updatedAt),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    conv.title.ifBlank { "(無題)" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    formatEpochSeconds(conv.updatedAt),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
                     text = { Text("削除") },

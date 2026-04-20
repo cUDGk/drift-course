@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,10 +43,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.driftcourse.app.net.Conversation
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
-private val STRUCTURED_KEYS = setOf("description", "personality", "scenario", "first_mes", "mes_example", "memory")
+private val STRUCTURED_KEYS = setOf("description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,9 +77,12 @@ fun CharacterEditScreen(
     var firstMes by remember { mutableStateOf(initialDraft?.first_mes.orEmpty()) }
     var mesExample by remember { mutableStateOf(initialDraft?.mes_example.orEmpty()) }
     var memoryText by remember { mutableStateOf(initialDraft?.memory.orEmpty()) }
+    var icon by remember { mutableStateOf(initialDraft?.icon.orEmpty()) }
     var originalCard by remember { mutableStateOf(JsonObject(emptyMap())) }
     var hydrated by remember { mutableStateOf(characterId == null) }
     var confirmDelete by remember { mutableStateOf(false) }
+
+    val launchIconPicker = rememberIconPicker { picked -> icon = picked }
 
     LaunchedEffect(characterId) {
         if (characterId != null) vm.load(characterId)
@@ -98,6 +100,7 @@ fun CharacterEditScreen(
             firstMes = readCardString(c.card, "first_mes")
             mesExample = readCardString(c.card, "mes_example")
             memoryText = readCardString(c.card, "memory")
+            icon = readCardString(c.card, "icon")
             hydrated = true
         }
     }
@@ -145,6 +148,26 @@ fun CharacterEditScreen(
                     Icon(Icons.Default.AutoAwesome, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
                     Text("AI で編集")
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                ModelAvatar(
+                    iconDataUrl = icon,
+                    fallbackName = name,
+                    size = 96.dp,
+                    modifier = Modifier.clickable { launchIconPicker() },
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { launchIconPicker() }) { Text("画像を選択") }
+                    TextButton(
+                        onClick = { icon = "" },
+                        enabled = icon.isNotBlank(),
+                    ) { Text("削除") }
                 }
             }
 
@@ -222,7 +245,7 @@ fun CharacterEditScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val card = mergeCard(originalCard, description, personality, scenario, firstMes, mesExample, memoryText)
+                        val card = mergeCard(originalCard, description, personality, scenario, firstMes, mesExample, memoryText, icon)
                         if (characterId == null) {
                             vm.create(name.trim(), systemPrompt, card) { onBack() }
                         } else {
@@ -312,11 +335,6 @@ private fun ConversationRow(conv: Conversation, onClick: () -> Unit) {
     }
 }
 
-private fun readCardString(card: JsonObject, key: String): String {
-    val el = card[key] ?: return ""
-    return runCatching { el.jsonPrimitive.contentOrNull.orEmpty() }.getOrDefault("")
-}
-
 private fun mergeCard(
     original: JsonObject,
     description: String,
@@ -325,6 +343,7 @@ private fun mergeCard(
     firstMes: String,
     mesExample: String,
     memory: String,
+    icon: String,
 ): JsonObject {
     val merged = LinkedHashMap<String, kotlinx.serialization.json.JsonElement>()
     original.forEach { (k, v) ->
@@ -336,5 +355,6 @@ private fun mergeCard(
     if (firstMes.isNotEmpty()) merged["first_mes"] = JsonPrimitive(firstMes)
     if (mesExample.isNotEmpty()) merged["mes_example"] = JsonPrimitive(mesExample)
     if (memory.isNotEmpty()) merged["memory"] = JsonPrimitive(memory)
+    if (icon.isNotEmpty()) merged["icon"] = JsonPrimitive(icon)
     return JsonObject(merged)
 }

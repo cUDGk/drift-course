@@ -18,6 +18,9 @@ data class CharacterDraft(
     val first_mes: String = "",
     val mes_example: String = "",
     val memory: String = "",
+    // icon は LLM には生成させない。編集画面で手動設定した data URL をドラフトに
+    // 引き継ぐためだけに持つ。
+    val icon: String = "",
 )
 
 object PendingCharacterPrefill {
