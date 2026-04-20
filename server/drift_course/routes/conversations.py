@@ -116,7 +116,8 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
 
     db.append_message(convid, "user", body.content)
 
-    history = db.list_messages(convid)
+    # 要約済みメッセージは mid レイヤに入っているので raw では再送しない。
+    history = db.list_unsummarized_messages(convid)
     system = _compose_system(character, db.get_memory(convid))
     messages: list[dict[str, str]] = []
     if system:
@@ -170,3 +171,14 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/{convid}/summarize")
+async def trigger_summarize(convid: str, request: Request) -> dict[str, Any]:
+    db = request.app.state.db
+    if db.get_conversation(convid) is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    summarizer = getattr(request.app.state, "summarizer", None)
+    if summarizer is None:
+        raise HTTPException(status_code=503, detail="summarizer not enabled")
+    return await summarizer._summarize(convid)

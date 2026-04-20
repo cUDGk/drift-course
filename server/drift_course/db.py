@@ -35,9 +35,11 @@ CREATE TABLE IF NOT EXISTS messages (
   conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   role            TEXT NOT NULL CHECK (role IN ('system','user','assistant')),
   content         TEXT NOT NULL,
-  created_at      INTEGER NOT NULL
+  created_at      INTEGER NOT NULL,
+  summarized_at   INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_msg_unsummarized ON messages(conversation_id, summarized_at);
 
 CREATE TABLE IF NOT EXISTS memory_layers (
   conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -68,6 +70,12 @@ class Database:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.execute("PRAGMA synchronous=NORMAL")
+        # 旧スキーマ (summarized_at 無し) のデプロイ向けの防御的 ALTER。
+        # idx_msg_unsummarized が summarized_at を参照するため executescript より前に入れる。
+        try:
+            self.conn.execute("ALTER TABLE messages ADD COLUMN summarized_at INTEGER")
+        except sqlite3.OperationalError:
+            pass
         self.conn.executescript(SCHEMA)
 
     @contextmanager
@@ -183,6 +191,35 @@ class Database:
             "SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at", (convid,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def list_unsummarized_messages(self, convid: str) -> list[dict[str, Any]]:
+        # system は system プロンプト再合成側で扱うので除外。
+        rows = self.conn.execute(
+            "SELECT * FROM messages WHERE conversation_id=? AND role != 'system' "
+            "AND summarized_at IS NULL ORDER BY created_at",
+            (convid,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def mark_summarized(self, message_ids: list[str], ts: int) -> None:
+        if not message_ids:
+            return
+        placeholders = ",".join("?" * len(message_ids))
+        with self.tx() as c:
+            c.execute(
+                f"UPDATE messages SET summarized_at=? WHERE id IN ({placeholders})",
+                (ts, *message_ids),
+            )
+
+    def count_unsummarized_tokens(self, convid: str) -> int:
+        # LENGTH(content) は SQLite では UTF-16 コードユニット数 (sqlite3 driver 経由)。
+        # 日本語想定なので cp / 4 は粗い下限見積もりで十分。実トークナイザは呼ばない。
+        row = self.conn.execute(
+            "SELECT COALESCE(SUM(LENGTH(content)), 0) AS s FROM messages "
+            "WHERE conversation_id=? AND role != 'system' AND summarized_at IS NULL",
+            (convid,),
+        ).fetchone()
+        return int(row["s"]) // 4
 
     # --- memory ---
     def get_memory(self, convid: str) -> dict[str, str]:

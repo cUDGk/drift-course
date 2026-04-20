@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
@@ -54,6 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
+    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: ChatViewModel = viewModel(),
 ) {
@@ -71,7 +73,7 @@ fun ChatScreen(
             title = {
                 Column {
                     Text(
-                        "DriftCourse",
+                        "デバッグチャット",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -80,9 +82,9 @@ fun ChatScreen(
                         Spacer(Modifier.width(6.dp))
                         Text(
                             text = when {
-                                error != null -> "error"
-                                streaming -> "streaming…"
-                                else -> "ready"
+                                error != null -> "エラー"
+                                streaming -> "生成中…"
+                                else -> "待機中"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -90,12 +92,17 @@ fun ChatScreen(
                     }
                 }
             },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                }
+            },
             actions = {
                 IconButton(onClick = viewModel::clear, enabled = !streaming) {
-                    Icon(Icons.Default.Delete, contentDescription = "Clear chat")
+                    Icon(Icons.Default.Delete, contentDescription = "履歴を消去")
                 }
                 IconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    Icon(Icons.Default.Settings, contentDescription = "設定")
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -158,12 +165,12 @@ private fun EmptyState() {
             modifier = Modifier.padding(24.dp),
         ) {
             Text(
-                "DriftCourse",
+                "デバッグチャット",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "メッセージを送るとサーバにストリーミング。",
+                "メッセージを送るとサーバへストリーミングします。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

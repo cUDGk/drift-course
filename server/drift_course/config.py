@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     # SQLite DB
     db_path: Path = Field(default=Path("./drift.db"))
 
+    # 自動要約 (mid レイヤ更新) の動作パラメータ。
+    # 閾値は文字数/4 の荒いトークン見積もり。tokenizer を呼ばない。
+    summarize_interval_s: float = 30.0
+    summarize_trigger_tokens: int = 3000
+    summarize_batch_tokens: int = 2000
+    summarize_keep_tokens: int = 1500
+    summarize_enabled: bool = True
+
 
 def ensure_token(settings: Settings) -> str:
     """

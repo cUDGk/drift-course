@@ -64,7 +64,7 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
                 _messages.value = api.listMessages(id).map { UiMessage(it.role, it.content) }
             } catch (t: Throwable) {
                 Log.e("ConversationVM", "load failed", t)
-                _error.value = t.message ?: "load error"
+                _error.value = t.message ?: "読み込みに失敗しました"
             }
         }
     }
@@ -76,7 +76,7 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             refreshCfg()
             if (currentToken.isBlank()) {
-                _error.value = "token が未設定です"
+                _error.value = "トークンが未設定です"
                 return@launch
             }
             val userMsg = UiMessage("user", trimmed)
@@ -93,8 +93,8 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
                     }
                 } catch (t: Throwable) {
                     Log.e("ConversationVM", "stream failed", t)
-                    _error.value = t.message ?: "stream error"
-                    updateLastAssistant(buf.toString() + "\n\n[error] ${t.message ?: t::class.java.simpleName}")
+                    _error.value = t.message ?: "ストリーミングに失敗しました"
+                    updateLastAssistant(buf.toString() + "\n\n[エラー] ${t.message ?: t::class.java.simpleName}")
                 } finally {
                     _streaming.value = false
                 }

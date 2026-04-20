@@ -16,11 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -34,15 +31,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,48 +46,31 @@ import com.driftcourse.app.net.Character
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterListScreen(
-    onOpenSettings: () -> Unit,
+    onBack: () -> Unit,
     onOpenCharacter: (String) -> Unit,
     onNewCharacter: () -> Unit,
-    onOpenDebugChat: () -> Unit,
     vm: CharacterListVM = viewModel(),
 ) {
     val characters by vm.characters.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
-    var menuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { vm.reload() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Characters", fontWeight = FontWeight.SemiBold) },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Debug chat") },
-                                onClick = { menuOpen = false; onOpenDebugChat() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Reload") },
-                                onClick = { menuOpen = false; vm.reload() },
-                            )
-                        }
+                title = { Text("キャラクター", fontWeight = FontWeight.SemiBold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                     }
                 },
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onNewCharacter) {
-                Icon(Icons.Default.Add, contentDescription = "New character")
+                Icon(Icons.Default.Add, contentDescription = "新規キャラクター")
             }
         },
     ) { inner ->
@@ -142,7 +119,7 @@ private fun EmptyCharacterState(onNewCharacter: () -> Unit) {
             modifier = Modifier.padding(24.dp),
         ) {
             Text(
-                "キャラクターがまだありません",
+                "まだキャラクターがありません",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -160,7 +137,7 @@ private fun EmptyCharacterState(onNewCharacter: () -> Unit) {
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             ) {
                 Text(
-                    "Create your first character",
+                    "最初のキャラクターを作成",
                     color = MaterialTheme.colorScheme.onPrimary,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -189,7 +166,7 @@ private fun CharacterRow(character: Character, onClick: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    character.name.ifBlank { "(unnamed)" },
+                    character.name.ifBlank { "(名前なし)" },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )

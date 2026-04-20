@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.first
 
 private object Routes {
     const val SETTINGS = "settings"
+    const val CONVERSATIONS = "conversations"
     const val CHARACTERS = "characters"
     const val CHARACTER_NEW = "character/new"
     const val CHARACTER_EDIT = "character/{id}"
@@ -39,7 +40,7 @@ fun DriftCourseApp() {
     var start by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         val s = store.flow.first()
-        start = if (s.token.isBlank()) Routes.SETTINGS else Routes.CHARACTERS
+        start = if (s.token.isBlank()) Routes.SETTINGS else Routes.CONVERSATIONS
     }
 
     val startDest = start ?: return
@@ -49,20 +50,28 @@ fun DriftCourseApp() {
             SettingsScreen(
                 onBack = {
                     if (!nav.popBackStack()) {
-                        nav.navigate(Routes.CHARACTERS) {
+                        nav.navigate(Routes.CONVERSATIONS) {
                             popUpTo(Routes.SETTINGS) { inclusive = true }
                         }
                     }
                 },
+                onOpenCharacters = { nav.navigate(Routes.CHARACTERS) },
+                onOpenDebugChat = { nav.navigate(Routes.DEBUG_CHAT) },
+            )
+        }
+
+        composable(Routes.CONVERSATIONS) {
+            ConversationsHomeScreen(
+                onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                onOpenConversation = { nav.navigate(Routes.conversation(it)) },
             )
         }
 
         composable(Routes.CHARACTERS) {
             CharacterListScreen(
-                onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                onBack = { nav.popBackStack() },
                 onOpenCharacter = { nav.navigate(Routes.characterEdit(it)) },
                 onNewCharacter = { nav.navigate(Routes.CHARACTER_NEW) },
-                onOpenDebugChat = { nav.navigate(Routes.DEBUG_CHAT) },
             )
         }
 
@@ -107,7 +116,10 @@ fun DriftCourseApp() {
         }
 
         composable(Routes.DEBUG_CHAT) {
-            ChatScreen(onOpenSettings = { nav.navigate(Routes.SETTINGS) })
+            ChatScreen(
+                onBack = { nav.popBackStack() },
+                onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+            )
         }
     }
 }

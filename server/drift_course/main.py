@@ -10,6 +10,7 @@ from .config import Settings, ensure_token
 from .db import Database
 from .llama_proc import LlamaServer
 from .routes import characters, chat, conversations, health, models
+from .summarizer import Summarizer
 
 log = logging.getLogger(__name__)
 
@@ -30,9 +31,18 @@ async def lifespan(app: FastAPI):
 
     log.warning("DriftCourse token: %s", token)
     await llama.start()
+
+    summarizer: Summarizer | None = None
+    if settings.summarize_enabled:
+        summarizer = Summarizer(settings, db, http, llama)
+        await summarizer.start()
+    app.state.summarizer = summarizer
+
     try:
         yield
     finally:
+        if summarizer is not None:
+            await summarizer.stop()
         await llama.stop()
         await http.aclose()
         db.close()

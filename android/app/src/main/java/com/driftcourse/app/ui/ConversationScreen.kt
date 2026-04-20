@@ -76,7 +76,7 @@ fun ConversationScreen(
             title = {
                 Column {
                     Text(
-                        conversation?.title?.ifBlank { "(untitled)" } ?: "…",
+                        conversation?.title?.ifBlank { "(無題)" } ?: "…",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -85,9 +85,9 @@ fun ConversationScreen(
                         Spacer(Modifier.width(6.dp))
                         Text(
                             text = when {
-                                error != null -> "error"
-                                streaming -> "streaming…"
-                                else -> "ready"
+                                error != null -> "エラー"
+                                streaming -> "生成中…"
+                                else -> "待機中"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -97,12 +97,12 @@ fun ConversationScreen(
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                 }
             },
             actions = {
                 IconButton(onClick = { onOpenMemory(conversationId) }) {
-                    Icon(Icons.Default.Memory, contentDescription = "Memory")
+                    Icon(Icons.Default.Memory, contentDescription = "記憶")
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(

@@ -39,10 +39,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.driftcourse.app.net.Conversation
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
-private val PRETTY_JSON = Json { prettyPrint = true }
+private val STRUCTURED_KEYS = setOf("description", "personality", "scenario", "first_mes", "mes_example")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,8 +61,12 @@ fun CharacterEditScreen(
 
     var name by remember { mutableStateOf("") }
     var systemPrompt by remember { mutableStateOf("") }
-    var cardText by remember { mutableStateOf("{}") }
-    var cardValid by remember { mutableStateOf(true) }
+    var description by remember { mutableStateOf("") }
+    var personality by remember { mutableStateOf("") }
+    var scenario by remember { mutableStateOf("") }
+    var firstMes by remember { mutableStateOf("") }
+    var mesExample by remember { mutableStateOf("") }
+    var originalCard by remember { mutableStateOf(JsonObject(emptyMap())) }
     var hydrated by remember { mutableStateOf(characterId == null) }
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -73,7 +79,12 @@ fun CharacterEditScreen(
         if (c != null && !hydrated) {
             name = c.name
             systemPrompt = c.systemPrompt
-            cardText = PRETTY_JSON.encodeToString(JsonObject.serializer(), c.card)
+            originalCard = c.card
+            description = readCardString(c.card, "description")
+            personality = readCardString(c.card, "personality")
+            scenario = readCardString(c.card, "scenario")
+            firstMes = readCardString(c.card, "first_mes")
+            mesExample = readCardString(c.card, "mes_example")
             hydrated = true
         }
     }
@@ -81,10 +92,10 @@ fun CharacterEditScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (characterId == null) "New character" else "Edit character") },
+                title = { Text(if (characterId == null) "新規キャラクター" else "キャラクター編集") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                     }
                 },
             )
@@ -115,7 +126,7 @@ fun CharacterEditScreen(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
+                label = { Text("名前") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -123,27 +134,52 @@ fun CharacterEditScreen(
             OutlinedTextField(
                 value = systemPrompt,
                 onValueChange = { systemPrompt = it },
-                label = { Text("System prompt") },
+                label = { Text("システムプロンプト") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp),
             )
 
             OutlinedTextField(
-                value = cardText,
-                onValueChange = {
-                    cardText = it
-                    cardValid = runCatching { parseCard(it) }.isSuccess
-                },
-                label = { Text("Card (JSON object)") },
-                isError = !cardValid,
-                supportingText = {
-                    Text(
-                        if (cardValid) "有効な JSON オブジェクト" else "JSON object としてパースできません",
-                        color = if (cardValid) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.error,
-                    )
-                },
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("人物説明") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 100.dp),
+            )
+
+            OutlinedTextField(
+                value = personality,
+                onValueChange = { personality = it },
+                label = { Text("性格") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 100.dp),
+            )
+
+            OutlinedTextField(
+                value = scenario,
+                onValueChange = { scenario = it },
+                label = { Text("状況設定") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 100.dp),
+            )
+
+            OutlinedTextField(
+                value = firstMes,
+                onValueChange = { firstMes = it },
+                label = { Text("初回挨拶") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 100.dp),
+            )
+
+            OutlinedTextField(
+                value = mesExample,
+                onValueChange = { mesExample = it },
+                label = { Text("例会話") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp),
@@ -152,24 +188,24 @@ fun CharacterEditScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val card = runCatching { parseCard(cardText) }.getOrNull() ?: return@Button
+                        val card = mergeCard(originalCard, description, personality, scenario, firstMes, mesExample)
                         if (characterId == null) {
                             vm.create(name.trim(), systemPrompt, card) { onBack() }
                         } else {
                             vm.save(characterId, name.trim(), systemPrompt, card) { onBack() }
                         }
                     },
-                    enabled = !busy && name.isNotBlank() && cardValid,
+                    enabled = !busy && name.isNotBlank(),
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(if (characterId == null) "Create" else "Save")
+                    Text(if (characterId == null) "作成" else "保存")
                 }
                 if (characterId != null) {
                     OutlinedButton(
                         onClick = { confirmDelete = true },
                         enabled = !busy,
                     ) {
-                        Text("Delete")
+                        Text("削除")
                     }
                 }
             }
@@ -177,7 +213,7 @@ fun CharacterEditScreen(
             if (characterId != null) {
                 Spacer(Modifier.padding(vertical = 4.dp))
                 Text(
-                    "CONVERSATIONS",
+                    "会話",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
@@ -191,7 +227,7 @@ fun CharacterEditScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("New conversation")
+                    Text("新しい会話")
                 }
                 conversations.forEach { conv ->
                     ConversationRow(conv, onClick = { onOpenConversation(conv.id) })
@@ -203,16 +239,16 @@ fun CharacterEditScreen(
     if (confirmDelete && characterId != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete character?") },
+            title = { Text("キャラクターを削除しますか？") },
             text = { Text("このキャラクターと紐づく会話も全て失われます。") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     vm.delete(characterId) { onBack() }
-                }) { Text("Delete") }
+                }) { Text("削除") }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmDelete = false }) { Text("キャンセル") }
             },
         )
     }
@@ -229,7 +265,7 @@ private fun ConversationRow(conv: Conversation, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Text(
-                conv.title.ifBlank { "(untitled)" },
+                conv.title.ifBlank { "(無題)" },
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -242,8 +278,27 @@ private fun ConversationRow(conv: Conversation, onClick: () -> Unit) {
     }
 }
 
-private fun parseCard(text: String): JsonObject {
-    val trimmed = text.trim()
-    if (trimmed.isEmpty()) return JsonObject(emptyMap())
-    return Json.parseToJsonElement(trimmed) as JsonObject
+private fun readCardString(card: JsonObject, key: String): String {
+    val el = card[key] ?: return ""
+    return runCatching { el.jsonPrimitive.contentOrNull.orEmpty() }.getOrDefault("")
+}
+
+private fun mergeCard(
+    original: JsonObject,
+    description: String,
+    personality: String,
+    scenario: String,
+    firstMes: String,
+    mesExample: String,
+): JsonObject {
+    val merged = LinkedHashMap<String, kotlinx.serialization.json.JsonElement>()
+    original.forEach { (k, v) ->
+        if (k !in STRUCTURED_KEYS) merged[k] = v
+    }
+    if (description.isNotEmpty()) merged["description"] = JsonPrimitive(description)
+    if (personality.isNotEmpty()) merged["personality"] = JsonPrimitive(personality)
+    if (scenario.isNotEmpty()) merged["scenario"] = JsonPrimitive(scenario)
+    if (firstMes.isNotEmpty()) merged["first_mes"] = JsonPrimitive(firstMes)
+    if (mesExample.isNotEmpty()) merged["mes_example"] = JsonPrimitive(mesExample)
+    return JsonObject(merged)
 }

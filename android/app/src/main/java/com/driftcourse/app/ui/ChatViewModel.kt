@@ -60,7 +60,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             currentUrl = cfg.url
             currentToken = cfg.token
             if (currentToken.isBlank()) {
-                _error.value = "token が未設定です。Settings で登録してください。"
+                _error.value = "トークンが未設定です。設定画面から登録してください。"
                 return@launch
             }
 
@@ -83,8 +83,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "chat failed", t)
-                    _error.value = t.message ?: "stream error"
-                    updateLastAssistant(buf.toString() + "\n\n[error] ${t.message ?: t::class.java.simpleName}")
+                    _error.value = t.message ?: "ストリーミングに失敗しました"
+                    updateLastAssistant(buf.toString() + "\n\n[エラー] ${t.message ?: t::class.java.simpleName}")
                 } finally {
                     _streaming.value = false
                 }

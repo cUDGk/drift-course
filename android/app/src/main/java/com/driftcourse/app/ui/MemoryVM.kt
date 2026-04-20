@@ -52,7 +52,7 @@ class MemoryVM(app: Application) : AndroidViewModel(app) {
                 _memory.value = api.getMemory(id)
             } catch (t: Throwable) {
                 Log.e("MemoryVM", "load failed", t)
-                _status.value = "load failed: ${t.message}"
+                _status.value = "読み込みに失敗しました: ${t.message}"
             } finally {
                 _busy.value = false
             }
@@ -74,10 +74,10 @@ class MemoryVM(app: Application) : AndroidViewModel(app) {
                     "long" -> _memory.value.copy(long = content)
                     else -> _memory.value
                 }
-                _status.value = "$layer saved"
+                _status.value = "$layer を保存しました"
             } catch (t: Throwable) {
                 Log.e("MemoryVM", "save failed", t)
-                _status.value = "save failed: ${t.message}"
+                _status.value = "保存に失敗しました: ${t.message}"
             } finally {
                 _busy.value = false
             }

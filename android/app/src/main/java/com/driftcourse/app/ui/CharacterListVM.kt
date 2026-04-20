@@ -46,7 +46,7 @@ class CharacterListVM(app: Application) : AndroidViewModel(app) {
             currentUrl = cfg.url
             currentToken = cfg.token
             if (currentToken.isBlank()) {
-                _error.value = "token が未設定です"
+                _error.value = "トークンが未設定です"
                 return@launch
             }
             _loading.value = true
@@ -55,7 +55,7 @@ class CharacterListVM(app: Application) : AndroidViewModel(app) {
                 _characters.value = api.listCharacters().sortedByDescending { it.updatedAt }
             } catch (t: Throwable) {
                 Log.e("CharacterListVM", "listCharacters failed", t)
-                _error.value = t.message ?: "load error"
+                _error.value = t.message ?: "読み込みに失敗しました"
             } finally {
                 _loading.value = false
             }

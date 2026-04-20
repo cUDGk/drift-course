@@ -14,12 +14,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +45,11 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenCharacters: () -> Unit,
+    onOpenDebugChat: () -> Unit,
+) {
     val context = LocalContext.current
     val store = remember { SettingsStore(context.applicationContext as Application) }
     val scope = rememberCoroutineScope()
@@ -63,10 +69,10 @@ fun SettingsScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text("設定") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                     }
                 },
             )
@@ -81,12 +87,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SectionHeader("Server")
+            SectionHeader("サーバー")
 
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
-                label = { Text("Server URL") },
+                label = { Text("サーバー URL") },
                 placeholder = { Text("http://192.168.1.7:8787") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
@@ -99,7 +105,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             OutlinedTextField(
                 value = token,
                 onValueChange = { token = it },
-                label = { Text("Bearer token") },
+                label = { Text("トークン") },
                 placeholder = { Text("server/.drift-token の中身") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
@@ -119,11 +125,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("保存")
+                Text("設定を保存")
             }
 
             Spacer(Modifier.size(4.dp))
-            SectionHeader("Connection check")
+            SectionHeader("接続確認")
 
             Button(
                 onClick = {
@@ -137,8 +143,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                         status = runCatching { api.health() }
                             .fold(
                                 onSuccess = { h ->
-                                    val model = h.currentModel.ifEmpty { "(none)" }
-                                    "OK · model=$model · running=${h.ok}"
+                                    val model = h.currentModel.ifEmpty { "(なし)" }
+                                    "OK · モデル=$model · 稼働=${h.ok}"
                                 },
                                 onFailure = { "NG: ${it.message ?: it::class.java.simpleName}" },
                             )
@@ -146,7 +152,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("/health を叩く")
+                Text("接続を確認")
             }
 
             status?.let {
@@ -156,6 +162,24 @@ fun SettingsScreen(onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+
+            Spacer(Modifier.size(8.dp))
+            HorizontalDivider()
+            SectionHeader("詳細")
+
+            TextButton(
+                onClick = onOpenCharacters,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("キャラクター管理")
+            }
+
+            TextButton(
+                onClick = onOpenDebugChat,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("デバッグチャット")
+            }
         }
     }
 }
@@ -163,7 +187,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 @Composable
 private fun SectionHeader(text: String) {
     Text(
-        text = text.uppercase(),
+        text = text,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,

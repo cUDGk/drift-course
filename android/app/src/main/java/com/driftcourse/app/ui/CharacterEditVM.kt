@@ -57,7 +57,7 @@ class CharacterEditVM(app: Application) : AndroidViewModel(app) {
                 _conversations.value = api.listConversations(id).sortedByDescending { it.updatedAt }
             } catch (t: Throwable) {
                 Log.e("CharacterEditVM", "load failed", t)
-                _error.value = t.message ?: "load error"
+                _error.value = t.message ?: "読み込みに失敗しました"
             } finally {
                 _busy.value = false
             }
@@ -75,7 +75,7 @@ class CharacterEditVM(app: Application) : AndroidViewModel(app) {
                 onDone(created)
             } catch (t: Throwable) {
                 Log.e("CharacterEditVM", "create failed", t)
-                _error.value = t.message ?: "create error"
+                _error.value = t.message ?: "作成に失敗しました"
             } finally {
                 _busy.value = false
             }
@@ -92,7 +92,7 @@ class CharacterEditVM(app: Application) : AndroidViewModel(app) {
                 onDone()
             } catch (t: Throwable) {
                 Log.e("CharacterEditVM", "save failed", t)
-                _error.value = t.message ?: "save error"
+                _error.value = t.message ?: "保存に失敗しました"
             } finally {
                 _busy.value = false
             }
@@ -109,7 +109,7 @@ class CharacterEditVM(app: Application) : AndroidViewModel(app) {
                 onDone()
             } catch (t: Throwable) {
                 Log.e("CharacterEditVM", "delete failed", t)
-                _error.value = t.message ?: "delete error"
+                _error.value = t.message ?: "削除に失敗しました"
             } finally {
                 _busy.value = false
             }
@@ -127,7 +127,7 @@ class CharacterEditVM(app: Application) : AndroidViewModel(app) {
                 onDone(created)
             } catch (t: Throwable) {
                 Log.e("CharacterEditVM", "newConversation failed", t)
-                _error.value = t.message ?: "new conv error"
+                _error.value = t.message ?: "会話の作成に失敗しました"
             } finally {
                 _busy.value = false
             }

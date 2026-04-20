@@ -112,7 +112,7 @@ class DriftApi(
         }
         if (requireAuth) {
             val token = tokenProvider()
-            if (token.isBlank()) error("token not set")
+            if (token.isBlank()) error("トークンが未設定です")
             builder.header("Authorization", "Bearer $token")
         }
         val response = driftHttpClient.newCall(builder.build()).await()

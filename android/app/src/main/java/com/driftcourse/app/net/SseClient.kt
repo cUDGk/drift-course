@@ -32,7 +32,7 @@ class SseClient(
         val baseUrl = normalizeBaseUrl(baseUrlProvider())
         val token = tokenProvider()
         if (token.isBlank()) {
-            close(IllegalStateException("token not set — open settings to pair with server"))
+            close(IllegalStateException("トークンが未設定です。設定画面から登録してください。"))
             return@callbackFlow
         }
 

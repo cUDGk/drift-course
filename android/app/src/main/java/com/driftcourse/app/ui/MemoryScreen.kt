@@ -34,10 +34,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 private data class Layer(val key: String, val label: String)
 
 private val LAYERS = listOf(
-    Layer("char", "char"),
-    Layer("recent", "recent"),
-    Layer("mid", "mid"),
-    Layer("long", "long"),
+    Layer("char", "キャラ"),
+    Layer("recent", "直近"),
+    Layer("mid", "中期"),
+    Layer("long", "長期"),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,10 +70,10 @@ fun MemoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Memory") },
+                title = { Text("記憶") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                     }
                 },
             )
@@ -106,7 +106,7 @@ fun MemoryScreen(
                 OutlinedTextField(
                     value = value,
                     onValueChange = { drafts[current.key] = it },
-                    label = { Text("${current.label} layer") },
+                    label = { Text("${current.label} 層") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 240.dp),
@@ -117,7 +117,7 @@ fun MemoryScreen(
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Save ${current.label}")
+                    Text("${current.label}を保存")
                 }
 
                 status?.let {
