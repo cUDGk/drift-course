@@ -59,13 +59,22 @@ fun CharacterEditScreen(
     val busy by vm.busy.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
 
-    var name by remember { mutableStateOf("") }
+    // 新規作成時のみ、AI 対話フローからのドロップボックスをワンショット消費する。
+    val initialDraft = remember(characterId) {
+        if (characterId == null) {
+            PendingCharacterPrefill.draft.also { PendingCharacterPrefill.draft = null }
+        } else {
+            null
+        }
+    }
+
+    var name by remember { mutableStateOf(initialDraft?.name.orEmpty()) }
     var systemPrompt by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var personality by remember { mutableStateOf("") }
-    var scenario by remember { mutableStateOf("") }
-    var firstMes by remember { mutableStateOf("") }
-    var mesExample by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf(initialDraft?.description.orEmpty()) }
+    var personality by remember { mutableStateOf(initialDraft?.personality.orEmpty()) }
+    var scenario by remember { mutableStateOf(initialDraft?.scenario.orEmpty()) }
+    var firstMes by remember { mutableStateOf(initialDraft?.first_mes.orEmpty()) }
+    var mesExample by remember { mutableStateOf(initialDraft?.mes_example.orEmpty()) }
     var originalCard by remember { mutableStateOf(JsonObject(emptyMap())) }
     var hydrated by remember { mutableStateOf(characterId == null) }
     var confirmDelete by remember { mutableStateOf(false) }

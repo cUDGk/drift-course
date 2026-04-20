@@ -18,7 +18,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +51,7 @@ fun CharacterListScreen(
     onBack: () -> Unit,
     onOpenCharacter: (String) -> Unit,
     onNewCharacter: () -> Unit,
+    onNewCharacterByChat: () -> Unit = {},
     vm: CharacterListVM = viewModel(),
 ) {
     val characters by vm.characters.collectAsStateWithLifecycle()
@@ -69,8 +72,18 @@ fun CharacterListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNewCharacter) {
-                Icon(Icons.Default.Add, contentDescription = "新規キャラクター")
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick = onNewCharacterByChat,
+                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
+                    text = { Text("AI で作成") },
+                )
+                FloatingActionButton(onClick = onNewCharacter) {
+                    Icon(Icons.Default.Add, contentDescription = "新規キャラクター")
+                }
             }
         },
     ) { inner ->

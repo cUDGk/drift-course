@@ -21,6 +21,7 @@ private object Routes {
     const val CONVERSATIONS = "conversations"
     const val CHARACTERS = "characters"
     const val CHARACTER_NEW = "character/new"
+    const val CHARACTER_CREATE_CHAT = "character/create-chat"
     const val CHARACTER_EDIT = "character/{id}"
     const val CONVERSATION = "conversation/{id}"
     const val MEMORY = "memory/{convId}"
@@ -72,6 +73,7 @@ fun DriftCourseApp() {
                 onBack = { nav.popBackStack() },
                 onOpenCharacter = { nav.navigate(Routes.characterEdit(it)) },
                 onNewCharacter = { nav.navigate(Routes.CHARACTER_NEW) },
+                onNewCharacterByChat = { nav.navigate(Routes.CHARACTER_CREATE_CHAT) },
             )
         }
 
@@ -80,6 +82,18 @@ fun DriftCourseApp() {
                 characterId = null,
                 onBack = { nav.popBackStack() },
                 onOpenConversation = { nav.navigate(Routes.conversation(it)) },
+            )
+        }
+
+        composable(Routes.CHARACTER_CREATE_CHAT) {
+            CharacterCreateChatScreen(
+                onBack = { nav.popBackStack() },
+                onFinalize = {
+                    // 対話画面を popして `character/new` に差し替える。
+                    nav.navigate(Routes.CHARACTER_NEW) {
+                        popUpTo(Routes.CHARACTER_CREATE_CHAT) { inclusive = true }
+                    }
+                },
             )
         }
 
