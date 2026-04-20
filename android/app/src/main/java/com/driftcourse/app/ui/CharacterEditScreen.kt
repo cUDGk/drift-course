@@ -54,7 +54,6 @@ fun CharacterEditScreen(
     onBack: () -> Unit,
     onOpenConversation: (String) -> Unit,
     onEditByChat: (() -> Unit)? = null,
-    onSaved: () -> Unit = onBack,
     vm: CharacterEditVM = viewModel(),
 ) {
     val character by vm.character.collectAsStateWithLifecycle()
@@ -225,9 +224,9 @@ fun CharacterEditScreen(
                     onClick = {
                         val card = mergeCard(originalCard, description, personality, scenario, firstMes, mesExample, memoryText)
                         if (characterId == null) {
-                            vm.create(name.trim(), systemPrompt, card) { onSaved() }
+                            vm.create(name.trim(), systemPrompt, card) { onBack() }
                         } else {
-                            vm.save(characterId, name.trim(), systemPrompt, card) { onSaved() }
+                            vm.save(characterId, name.trim(), systemPrompt, card) { onBack() }
                         }
                     },
                     enabled = !busy && name.isNotBlank(),

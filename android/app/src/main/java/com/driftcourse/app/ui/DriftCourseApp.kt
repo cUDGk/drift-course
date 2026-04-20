@@ -85,11 +85,6 @@ fun DriftCourseApp() {
                 characterId = null,
                 onBack = { nav.popBackStack() },
                 onOpenConversation = { nav.navigate(Routes.conversation(it)) },
-                // 保存した時だけ AI 対話画面も畳んでホームへ。戻るキーは編集画面 → 対話に戻す。
-                onSaved = {
-                    nav.popBackStack(Routes.CHARACTER_CREATE_CHAT, inclusive = true)
-                        .also { popped -> if (!popped) nav.popBackStack() }
-                },
             )
         }
 
@@ -142,11 +137,8 @@ fun DriftCourseApp() {
             ModelEditChatScreen(
                 modelId = id,
                 onBack = { nav.popBackStack() },
-                onDone = {
-                    nav.navigate(Routes.modelDetail(id)) {
-                        popUpTo(Routes.MODEL_EDIT_CHAT) { inclusive = true }
-                    }
-                },
+                // 保存後も AI 編集画面を畳まず、戻るキーで来た順に戻れるように単純 pop。
+                onDone = { nav.popBackStack() },
             )
         }
 
