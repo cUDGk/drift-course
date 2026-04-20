@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive icon の背景。foreground (全面写真) がランチャーのマスクで切り取られる時に
+         端から透けて見える色。写真の支配色に近い淡いグレーにしておく。 -->
+    <color name="ic_launcher_background">#CFCFCF</color>
+</resources>
