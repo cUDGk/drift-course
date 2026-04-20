@@ -1,53 +1,45 @@
 package com.driftcourse.app.ui
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Build
 import android.os.CancellationSignal
 import android.util.Log
-import android.view.PixelCopy
 import android.view.ScrollCaptureCallback
 import android.view.ScrollCaptureSession
-import android.view.Surface
 import android.view.View
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalView
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.function.Consumer
 
 private const val TAG = "ScrollCapture"
 
 /**
- * Compose の LazyColumn に ScrollCaptureCallback を繋ぐ Modifier。
+ * Compose の LazyColumn を Android 12+ の「Capture more」機能に接続する Modifier。
  *
- * Android 12+ のスクロールスクリーンショットは Android View 階層向けに設計されていて
- * Compose は自動検出されないため、手動で View に callback を登録する必要がある。
- *
- * この実装はベストエフォート:
- * - scroll-capture 検索領域 = Modifier の画面上の矩形
- * - キャプチャ開始 → 元のオフセットを記録
- * - 画像要求 → 指定 rect を画面に来るようスクロールし、PixelCopy で window から抜き取る
- * - キャプチャ終了 → 元のオフセットに戻す
- *
- * 既知の割り切り: 指定 rect が現在 compose 済みの範囲を大きく超えると、
- * LazyColumn のアイテムが事前に生成されていないため取りこぼす可能性がある。
- * その場合はキャプチャ済み領域のみを onComplete に返すことで OS 側が終了判断する。
+ * 仕組み:
+ * - `onScrollCaptureSearch` で hostView のローカル座標系 (= rootView 座標系) における
+ *   スクロールコンテナ矩形を返す。
+ * - `onScrollCaptureImageRequest` では captureArea の top から「今 y=0 (= container の top) に
+ *   何を載せたいか」を逆算し、その分 `lazyListState.scrollBy` して 1 フレーム描画してから
+ *   `surface.lockHardwareCanvas()` に hostView をそのまま描く。
+ * - captureArea は負の top / container 高さを超える bottom を持ち得る。
+ *   前後端を超えた部分は `canScrollForward/Backward` を見てクリップし、
+ *   実際に描けた部分矩形を `onComplete` に返す事で OS 側が終点を検出できる。
  */
 fun Modifier.scrollCaptureProvider(
     lazyListState: LazyListState,
@@ -62,14 +54,16 @@ fun Modifier.scrollCaptureProvider(
             view.setScrollCaptureCallback(cb)
             onDispose {
                 view.setScrollCaptureCallback(null)
+                cb.dispose()
             }
         }
     }
 
     onGloballyPositioned { coords ->
-        val win = coords.positionInWindow()
+        // hostView は同じ ComposeView 配下なので positionInRoot() == hostView 内ローカル座標。
+        val root = coords.positionInRoot()
         val size = coords.size
-        boundsHolder.update(win, size.width, size.height)
+        boundsHolder.update(root, size.width, size.height)
     }
 }
 
@@ -89,6 +83,7 @@ private class ScrollCaptureBounds {
     fun asRect(): Rect = Rect(left, top, right, bottom)
     fun width(): Int = (right - left).coerceAtLeast(0)
     fun height(): Int = (bottom - top).coerceAtLeast(0)
+    fun isEmpty(): Boolean = width() <= 0 || height() <= 0
 }
 
 @RequiresApi(Build.VERSION_CODES.S)
@@ -98,14 +93,34 @@ private class ComposeScrollCaptureCallback(
     private val bounds: ScrollCaptureBounds,
 ) : ScrollCaptureCallback {
 
+    // 背景コルーチンは scope 使い回し。runBlocking(Main) はデッドロック要因なので禁止。
+    private val mainScope = MainScope()
+
     private var originalFirstIndex: Int = 0
     private var originalScrollOffset: Int = 0
+
+    /**
+     * 「現在 y=0 に何が載っているか」を bounds-local 座標で追跡する。
+     * 初期値 0 = キャプチャ開始時点の表示領域 top が bounds-local の 0 に一致する。
+     * scrollBy(delta) すると「上方向に delta 動く」= 載っているコンテンツ top が +delta ずれる。
+     */
+    @Volatile private var reportedTop: Int = 0
+    @Volatile private var ended: Boolean = false
+
+    fun dispose() {
+        mainScope.cancel()
+    }
 
     override fun onScrollCaptureSearch(
         signal: CancellationSignal,
         onReady: Consumer<Rect>,
     ) {
-        onReady.accept(bounds.asRect())
+        if (bounds.isEmpty()) {
+            onReady.accept(Rect())
+        } else {
+            // hostView (rootView) ローカル座標系のスクロールコンテナ矩形。
+            onReady.accept(bounds.asRect())
+        }
     }
 
     override fun onScrollCaptureStart(
@@ -115,6 +130,8 @@ private class ComposeScrollCaptureCallback(
     ) {
         originalFirstIndex = lazyListState.firstVisibleItemIndex
         originalScrollOffset = lazyListState.firstVisibleItemScrollOffset
+        reportedTop = 0
+        ended = false
         onReady.run()
     }
 
@@ -124,111 +141,129 @@ private class ComposeScrollCaptureCallback(
         captureArea: Rect,
         onComplete: Consumer<Rect>,
     ) {
-        // captureArea は bounds 座標系からの相対 Y オフセット付きの矩形。
-        // 単純化: 要求 Y 分だけ LazyColumn を scrollBy してから現在の window を PixelCopy する。
-        val w = bounds.width()
-        val h = bounds.height()
-        if (w <= 0 || h <= 0) {
+        val containerW = bounds.width()
+        val containerH = bounds.height()
+        if (containerW <= 0 || containerH <= 0 || captureArea.isEmpty) {
             onComplete.accept(Rect())
             return
         }
-        val dy = captureArea.top  // bounds top からの相対
-        // Compose の scrollBy は Main で動かす必要があるので runBlocking(Main)。
-        runCatching {
-            runBlocking(Dispatchers.Main) {
-                lazyListState.scrollBy(dy.toFloat())
+
+        // 想定済みの見える window は [reportedTop, reportedTop + containerH)。
+        // captureArea.top を y=0 に揃える為に scrollBy(captureArea.top - reportedTop) 実行する。
+        val targetTop = captureArea.top
+        val delta = targetTop - reportedTop
+
+        mainScope.launch {
+            if (signal.isCanceled) {
+                onComplete.accept(Rect())
+                return@launch
             }
-        }
 
-        // PixelCopy で hostView の window からキャプチャ領域を抜き取る。
-        val srcRect = Rect(
-            bounds.left,
-            bounds.top,
-            bounds.left + w,
-            bounds.top + h.coerceAtMost(captureArea.height()),
-        )
-        val bmp = Bitmap.createBitmap(srcRect.width(), srcRect.height(), Bitmap.Config.ARGB_8888)
-        val window = hostView.rootView
-        val win = hostView.context
-        val activity = findWindow(hostView)
-        if (activity == null) {
-            drawFallback(session.surface, bmp)
-            onComplete.accept(Rect(0, 0, bmp.width, bmp.height))
-            return
-        }
-
-        val latch = java.util.concurrent.CountDownLatch(1)
-        var success = false
-        try {
-            PixelCopy.request(
-                activity,
-                srcRect,
-                bmp,
-                { result ->
-                    success = (result == PixelCopy.SUCCESS)
-                    latch.countDown()
-                },
-                hostView.handler ?: android.os.Handler(hostView.context.mainLooper),
-            )
-            latch.await(2000, java.util.concurrent.TimeUnit.MILLISECONDS)
-        } catch (t: Throwable) {
-            Log.w(TAG, "PixelCopy failed", t)
-        }
-
-        if (!success) {
-            drawFallback(session.surface, bmp)
-            onComplete.accept(Rect(0, 0, bmp.width, bmp.height))
-            return
-        }
-
-        // Surface に bitmap を転写する。
-        val surface = session.surface
-        try {
-            val canvas = surface.lockCanvas(null)
-            try {
-                canvas.drawBitmap(bmp, 0f, 0f, Paint())
-            } finally {
-                surface.unlockCanvasAndPost(canvas)
+            val consumed = runCatching {
+                withContext(Dispatchers.Main) {
+                    val c = if (delta != 0) lazyListState.scrollBy(delta.toFloat()) else 0f
+                    awaitOneFrame()
+                    c
+                }
+            }.getOrElse {
+                Log.w(TAG, "scrollBy failed", it)
+                0f
             }
-        } catch (t: Throwable) {
-            Log.w(TAG, "surface draw failed", t)
-        } finally {
-            bmp.recycle()
-        }
 
-        onComplete.accept(Rect(0, 0, srcRect.width(), srcRect.height()))
+            // scrollBy の戻り値は実際に消費した px (端に当たると |consumed| < |delta|)。
+            // この値で reportedTop を進める事で、端を超えた要求でも描画は「動いた分だけ」で揃う。
+            reportedTop += consumed.toInt()
+
+            // この時点で y=0 には「bounds-local 座標で reportedTop のコンテンツ」が載っている。
+            // captureArea が載っている領域の [reportedTop, reportedTop + containerH) と交差する部分だけ描画する。
+            val visibleTop = reportedTop
+            val visibleBottom = reportedTop + containerH
+            val srcTop = captureArea.top.coerceAtLeast(visibleTop)
+            val srcBottom = captureArea.bottom.coerceAtMost(visibleBottom)
+            if (srcBottom <= srcTop) {
+                // 何も描けない (end/start 突き抜け)。
+                onComplete.accept(Rect())
+                return@launch
+            }
+            val srcLeft = captureArea.left.coerceAtLeast(0)
+            val srcRight = captureArea.right.coerceAtMost(containerW)
+            if (srcRight <= srcLeft) {
+                onComplete.accept(Rect())
+                return@launch
+            }
+
+            // hostView 上で描くべき矩形の左上 (hostView ローカル):
+            //   x: bounds.left + srcLeft
+            //   y: bounds.top  + (srcTop - reportedTop)
+            val drawLeftInHost = bounds.left + srcLeft
+            val drawTopInHost = bounds.top + (srcTop - reportedTop)
+
+            val destW = srcRight - srcLeft
+            val destH = srcBottom - srcTop
+
+            val surface = session.surface
+            val drawOk = runCatching {
+                val canvas = surface.lockHardwareCanvas()
+                try {
+                    canvas.save()
+                    // session.surface の左上 (0,0) に要求矩形の (srcLeft, srcTop) を載せる。
+                    // hostView を丸ごと draw してから不要部分は clip で抑える:
+                    //   canvas を (-drawLeftInHost, -drawTopInHost) 平行移動し、
+                    //   見せたい [0, destW) x [0, destH) だけ clip する。
+                    canvas.clipRect(0, 0, destW, destH)
+                    canvas.translate(-drawLeftInHost.toFloat(), -drawTopInHost.toFloat())
+                    hostView.draw(canvas)
+                    canvas.restore()
+                    true
+                } catch (t: Throwable) {
+                    Log.w(TAG, "hardware canvas draw failed", t)
+                    false
+                } finally {
+                    runCatching { surface.unlockCanvasAndPost(canvas) }
+                }
+            }.getOrElse {
+                Log.w(TAG, "lockHardwareCanvas failed", it)
+                false
+            }
+
+            if (!drawOk) {
+                onComplete.accept(Rect())
+                return@launch
+            }
+
+            // 返り rect は「captureArea 座標系で、実際に埋めた領域」。
+            // captureArea 原点 (= captureArea.left, captureArea.top) を基準にした内部矩形ではなく、
+            // captureArea と同じ座標系 (scroll-capture 座標系 = bounds ローカル) で返す。
+            onComplete.accept(Rect(srcLeft, srcTop, srcRight, srcBottom))
+        }
     }
 
     override fun onScrollCaptureEnd(onReady: Runnable) {
-        // 元のスクロール位置に戻す。
+        if (ended) {
+            // 再入防止 (idempotency)。
+            onReady.run()
+            return
+        }
+        ended = true
+        // 元のスクロール位置へ戻してから onReady。
         runCatching {
-            MainScope().launch {
-                lazyListState.scrollToItem(originalFirstIndex, originalScrollOffset)
+            mainScope.launch {
+                runCatching {
+                    withContext(Dispatchers.Main) {
+                        lazyListState.scrollToItem(originalFirstIndex, originalScrollOffset)
+                        awaitOneFrame()
+                    }
+                }
                 onReady.run()
             }
         }.onFailure { onReady.run() }
     }
 
-    private fun drawFallback(surface: Surface, fallback: Bitmap) {
-        try {
-            val canvas = surface.lockCanvas(null)
-            try {
-                canvas.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
-            } finally {
-                surface.unlockCanvasAndPost(canvas)
-            }
-        } catch (_: Throwable) {
-        } finally {
-            fallback.recycle()
-        }
+    /**
+     * Compose の次フレーム (recompose + draw) を 1 回待つ。
+     * withFrameNanos はそれ自体 suspend で、フレームコールバック登録後に再開する。
+     */
+    private suspend fun awaitOneFrame() {
+        withFrameNanos { /* no-op: 次フレームまで待つだけ */ }
     }
-}
-
-private fun findWindow(view: View): android.view.Window? {
-    var ctx: android.content.Context? = view.context
-    while (ctx is android.content.ContextWrapper) {
-        if (ctx is android.app.Activity) return ctx.window
-        ctx = ctx.baseContext
-    }
-    return null
 }

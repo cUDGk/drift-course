@@ -1,5 +1,14 @@
 package com.driftcourse.app.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -119,12 +129,23 @@ fun GhostChatScreen(
             }
         }
 
+        val iconDataUrl = character?.card?.let { readCardString(it, "icon") }?.ifBlank { null }
+        val lastAssistantLen = messages.lastOrNull()
+            ?.takeIf { it.role == "assistant" }?.content?.length ?: 0
+        val showLoadingAvatar = streaming && lastAssistantLen < 4
+
         Box(modifier = Modifier.weight(1f)) {
             if (messages.isEmpty()) {
                 EmptyGhost()
             } else {
                 GhostMessageList(messages = messages, streaming = streaming)
             }
+
+            GhostLoadingAvatarOverlay(
+                visible = showLoadingAvatar,
+                iconDataUrl = iconDataUrl,
+                fallbackName = character?.name.orEmpty(),
+            )
         }
 
         GhostComposer(
@@ -271,6 +292,57 @@ private fun GhostComposer(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "送信")
                 }
+            }
+        }
+    }
+}
+
+/**
+ * ゴーストモード版: ストリーム開始直後の「考え中…」アバター表示。
+ * ConversationScreen のものと同じ設計 (128.dp + 1.0 ↔ 1.08 パルス + 下 120.dp padding)。
+ */
+@Composable
+private fun GhostLoadingAvatarOverlay(
+    visible: Boolean,
+    iconDataUrl: String?,
+    fallbackName: String,
+) {
+    val transition = rememberInfiniteTransition(label = "ghost-thinking-pulse")
+    val scale by transition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "ghost-thinking-scale",
+    )
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(bottom = 120.dp),
+            ) {
+                ModelAvatar(
+                    iconDataUrl = iconDataUrl,
+                    fallbackName = fallbackName,
+                    size = 128.dp,
+                    modifier = Modifier.scale(scale),
+                )
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    "考え中…",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

@@ -45,6 +45,10 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
     private val _characterName = MutableStateFlow("")
     val characterName: StateFlow<String> = _characterName.asStateFlow()
 
+    // ストリーム中の大きなアバター表示用。card.icon は data URL (可 GIF)。
+    private val _iconDataUrl = MutableStateFlow<String?>(null)
+    val iconDataUrl: StateFlow<String?> = _iconDataUrl.asStateFlow()
+
     private var convId: String? = null
     private var streamJob: Job? = null
 
@@ -70,9 +74,10 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
                 try {
                     val c = api.getCharacter(conv.characterId)
                     _characterName.value = c.name
+                    _iconDataUrl.value = readCardString(c.card, "icon").ifBlank { null }
                 } catch (t: Throwable) {
-                    // ノート表示のラベル用途のみ。失敗しても本機能は損なわない。
-                    Log.w("ConversationVM", "getCharacter failed (label only)", t)
+                    // ノート表示のラベル用途 + アバター用途。失敗しても本機能は損なわない。
+                    Log.w("ConversationVM", "getCharacter failed (label/avatar only)", t)
                 }
             } catch (t: Throwable) {
                 Log.e("ConversationVM", "load failed", t)

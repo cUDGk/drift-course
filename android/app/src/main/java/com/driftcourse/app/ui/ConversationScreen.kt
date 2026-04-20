@@ -1,5 +1,14 @@
 package com.driftcourse.app.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -55,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,8 +86,14 @@ fun ConversationScreen(
     val streaming by vm.streaming.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val characterName by vm.characterName.collectAsStateWithLifecycle()
+    val iconDataUrl by vm.iconDataUrl.collectAsStateWithLifecycle()
 
     LaunchedEffect(conversationId) { vm.load(conversationId) }
+
+    // ストリーム中で、まだ delta が来ていない (または非常に短い) 時だけ大きなアバターを出す。
+    val lastAssistantLen = messages.lastOrNull()
+        ?.takeIf { it.role == "assistant" }?.content?.length ?: 0
+    val showLoadingAvatar = streaming && lastAssistantLen < 4
 
     var noteMode by rememberSaveable { mutableStateOf(false) }
 
@@ -169,6 +185,12 @@ fun ConversationScreen(
                     onLongPress = { msg -> menuFor = msg },
                 )
             }
+
+            LoadingAvatarOverlay(
+                visible = showLoadingAvatar,
+                iconDataUrl = iconDataUrl,
+                fallbackName = characterName,
+            )
         }
 
         ComposerLocal(
@@ -494,6 +516,58 @@ private fun ComposerLocal(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "送信")
                 }
+            }
+        }
+    }
+}
+
+/**
+ * ストリーム生成が始まったが、まだ最初の delta が戻っていない間だけ
+ * モデルの大きなアバター + 「考え中…」を表示するオーバーレイ。
+ * composer (下の入力欄) に被らないよう下側に 120.dp の余白を取る。
+ */
+@Composable
+private fun LoadingAvatarOverlay(
+    visible: Boolean,
+    iconDataUrl: String?,
+    fallbackName: String,
+) {
+    val transition = rememberInfiniteTransition(label = "thinking-pulse")
+    val scale by transition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "thinking-scale",
+    )
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(bottom = 120.dp),
+            ) {
+                ModelAvatar(
+                    iconDataUrl = iconDataUrl,
+                    fallbackName = fallbackName,
+                    size = 128.dp,
+                    modifier = Modifier.scale(scale),
+                )
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    "考え中…",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
