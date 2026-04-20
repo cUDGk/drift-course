@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.driftcourse.app.net.Character
 import com.driftcourse.app.net.DriftApi
+import com.driftcourse.app.net.isBare
 import com.driftcourse.app.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,7 +53,10 @@ class CharacterListVM(app: Application) : AndroidViewModel(app) {
             _loading.value = true
             _error.value = null
             try {
-                _characters.value = api.listCharacters().sortedByDescending { it.updatedAt }
+                // bare モデル (`card.bare == true`) は内部用なので一覧には出さない。
+                _characters.value = api.listCharacters()
+                    .filterNot { it.isBare() }
+                    .sortedByDescending { it.updatedAt }
             } catch (t: Throwable) {
                 Log.e("CharacterListVM", "listCharacters failed", t)
                 _error.value = t.message ?: "読み込みに失敗しました"

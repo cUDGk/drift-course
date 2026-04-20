@@ -14,14 +14,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,8 +45,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onOpenCharacters: () -> Unit,
-    onOpenDebugChat: () -> Unit,
 ) {
     val context = LocalContext.current
     val store = remember { SettingsStore(context.applicationContext as Application) }
@@ -161,24 +157,6 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-
-            Spacer(Modifier.size(8.dp))
-            HorizontalDivider()
-            SectionHeader("詳細")
-
-            TextButton(
-                onClick = onOpenCharacters,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("モデル管理")
-            }
-
-            TextButton(
-                onClick = onOpenDebugChat,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("デバッグチャット")
             }
         }
     }

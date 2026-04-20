@@ -10,6 +10,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,6 +55,15 @@ fun RootScaffold(
     Scaffold(
         bottomBar = {
             NavigationBar {
+                // 既定の indicator は secondaryContainer (テーマ上はオレンジ系) になるので、
+                // primary 系に差し替えて青基調を保つ。
+                val itemColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 tabs.forEach { tab ->
                     val selected = currentRoute == tab.route
                     NavigationBarItem(
@@ -71,6 +81,7 @@ fun RootScaffold(
                         },
                         icon = { Icon(tab.icon, contentDescription = null) },
                         label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
+                        colors = itemColors,
                     )
                 }
             }

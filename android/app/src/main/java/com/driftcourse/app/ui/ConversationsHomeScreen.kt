@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.driftcourse.app.net.Character
 import com.driftcourse.app.net.Conversation
+import com.driftcourse.app.net.isBare
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,7 +166,8 @@ private fun ConversationHomeRow(
         ) {
             ModelAvatar(
                 iconDataUrl = character?.card?.let { readCardString(it, "icon") },
-                fallbackName = character?.name.orEmpty(),
+                // bare モデルは名前空なので「素」で対話一覧から判別できるようにする。
+                fallbackName = if (character?.isBare() == true) "素" else character?.name.orEmpty(),
                 size = 32.dp,
             )
             Spacer(Modifier.width(12.dp))

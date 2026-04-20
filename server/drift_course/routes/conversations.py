@@ -95,6 +95,10 @@ CARD_LABELS = [
     ("memory", "記憶"),
 ]
 
+# LLM に投げてはいけない内部用キー。`icon` は data URL なので system prompt に流すとトークンを大量に食い潰すし、
+# `bare` は「素モデルです」という UI 向けマーカーで、LLM には無意味。どちらも [その他] にも載せない。
+INTERNAL_CARD_KEYS = {"icon", "bare"}
+
 
 def _compose_system(character: dict[str, Any], memory: dict[str, str]) -> str:
     # DRIFT の 4 層メモリ + カード項目をラベル付き日本語セクションとして結合する。
@@ -108,7 +112,10 @@ def _compose_system(character: dict[str, Any], memory: dict[str, str]) -> str:
         if isinstance(v, str) and v.strip():
             parts.append(f"[{label}]\n{v.strip()}")
     known = {kk for kk, _ in CARD_LABELS}
-    extras = {k: v for k, v in card.items() if k not in known}
+    extras = {
+        k: v for k, v in card.items()
+        if k not in known and k not in INTERNAL_CARD_KEYS
+    }
     if extras:
         parts.append(f"[その他]\n{json.dumps(extras, ensure_ascii=False, indent=2)}")
     for layer_name, label in (("long", "長期記憶"), ("mid", "中期要約"), ("recent", "直近")):

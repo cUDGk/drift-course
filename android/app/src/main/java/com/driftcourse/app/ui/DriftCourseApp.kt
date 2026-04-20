@@ -27,7 +27,6 @@ private object Routes {
     const val GHOST = "ghost/{modelId}"
     const val CONVERSATION = "conversation/{id}"
     const val MEMORY = "memory/{convId}"
-    const val DEBUG_CHAT = "chat"
 
     fun characterEdit(id: String) = "character/$id"
     fun modelDetail(id: String) = "model/$id"
@@ -61,12 +60,6 @@ fun DriftCourseApp() {
                         }
                     }
                 },
-                onOpenCharacters = {
-                    nav.navigate(Routes.ROOT) {
-                        popUpTo(Routes.SETTINGS) { inclusive = true }
-                    }
-                },
-                onOpenDebugChat = { nav.navigate(Routes.DEBUG_CHAT) },
             )
         }
 
@@ -171,13 +164,6 @@ fun DriftCourseApp() {
         ) { entry ->
             val id = entry.arguments?.getString("convId").orEmpty()
             MemoryScreen(conversationId = id, onBack = { nav.popBackStack() })
-        }
-
-        composable(Routes.DEBUG_CHAT) {
-            ChatScreen(
-                onBack = { nav.popBackStack() },
-                onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-            )
         }
     }
 }

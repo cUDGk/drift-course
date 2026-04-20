@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.driftcourse.app.net.Character
 import com.driftcourse.app.net.Conversation
 import com.driftcourse.app.net.DriftApi
-import com.driftcourse.app.net.ensureDefaultCharacter
+import com.driftcourse.app.net.ensureBareCharacter
 import com.driftcourse.app.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,7 +86,7 @@ class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
             _busy.value = true
             _error.value = null
             try {
-                val character = api.ensureDefaultCharacter()
+                val character = api.ensureBareCharacter()
                 val conv = api.createConversation(character.id)
                 _conversations.value = listOf(conv) + _conversations.value
                 onDone(conv)
