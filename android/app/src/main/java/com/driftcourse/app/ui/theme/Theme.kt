@@ -1,40 +1,47 @@
 package com.driftcourse.app.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 
 private val DarkColors = darkColorScheme(
     primary = DriftPrimaryDark,
+    onPrimary = DriftOnPrimaryDark,
+    primaryContainer = DriftPrimaryContainerDark,
+    onPrimaryContainer = DriftOnPrimaryContainerDark,
     secondary = DriftSecondaryDark,
+    onSecondary = DriftOnSecondaryDark,
+    secondaryContainer = DriftSecondaryContainerDark,
+    onSecondaryContainer = DriftOnSecondaryContainerDark,
     tertiary = DriftTertiaryDark,
+    onTertiary = DriftOnTertiaryDark,
+    tertiaryContainer = DriftTertiaryContainerDark,
+    onTertiaryContainer = DriftOnTertiaryContainerDark,
 )
 
 private val LightColors = lightColorScheme(
     primary = DriftPrimaryLight,
+    onPrimary = DriftOnPrimaryLight,
+    primaryContainer = DriftPrimaryContainerLight,
+    onPrimaryContainer = DriftOnPrimaryContainerLight,
     secondary = DriftSecondaryLight,
+    onSecondary = DriftOnSecondaryLight,
+    secondaryContainer = DriftSecondaryContainerLight,
+    onSecondaryContainer = DriftOnSecondaryContainerLight,
     tertiary = DriftTertiaryLight,
+    onTertiary = DriftOnTertiaryLight,
+    tertiaryContainer = DriftTertiaryContainerLight,
+    onTertiaryContainer = DriftOnTertiaryContainerLight,
 )
 
+// dynamic color は壁紙依存で青オレンジが崩れるので無効化。
 @Composable
 fun DriftCourseTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val colors = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val ctx = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        }
-        darkTheme -> DarkColors
-        else -> LightColors
-    }
+    val colors = if (darkTheme) DarkColors else LightColors
     MaterialTheme(colorScheme = colors, typography = DriftTypography, content = content)
 }

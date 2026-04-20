@@ -2,10 +2,33 @@ package com.driftcourse.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val DriftPrimaryDark = Color(0xFFB4CEFF)
-val DriftSecondaryDark = Color(0xFFBDC7DC)
-val DriftTertiaryDark = Color(0xFFDCBCE0)
-
+// 青オレンジ基調。primary = 青系、secondary/tertiary = オレンジ系。
 val DriftPrimaryLight = Color(0xFF1F5EDC)
-val DriftSecondaryLight = Color(0xFF555F71)
-val DriftTertiaryLight = Color(0xFF6F5573)
+val DriftOnPrimaryLight = Color(0xFFFFFFFF)
+val DriftPrimaryContainerLight = Color(0xFFD7E3FF)
+val DriftOnPrimaryContainerLight = Color(0xFF001A41)
+
+val DriftSecondaryLight = Color(0xFFB5651D)
+val DriftOnSecondaryLight = Color(0xFFFFFFFF)
+val DriftSecondaryContainerLight = Color(0xFFFFDCC2)
+val DriftOnSecondaryContainerLight = Color(0xFF321200)
+
+val DriftTertiaryLight = Color(0xFFE77F22)
+val DriftOnTertiaryLight = Color(0xFFFFFFFF)
+val DriftTertiaryContainerLight = Color(0xFFFFDCC2)
+val DriftOnTertiaryContainerLight = Color(0xFF331200)
+
+val DriftPrimaryDark = Color(0xFFB1C5FF)
+val DriftOnPrimaryDark = Color(0xFF002E6B)
+val DriftPrimaryContainerDark = Color(0xFF00429A)
+val DriftOnPrimaryContainerDark = Color(0xFFD7E3FF)
+
+val DriftSecondaryDark = Color(0xFFFFB77C)
+val DriftOnSecondaryDark = Color(0xFF532200)
+val DriftSecondaryContainerDark = Color(0xFF763600)
+val DriftOnSecondaryContainerDark = Color(0xFFFFDCC2)
+
+val DriftTertiaryDark = Color(0xFFFFB77C)
+val DriftOnTertiaryDark = Color(0xFF532200)
+val DriftTertiaryContainerDark = Color(0xFF763600)
+val DriftOnTertiaryContainerDark = Color(0xFFFFDCC2)
