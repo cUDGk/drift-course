@@ -1,0 +1,25 @@
+## Server (Python)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+*.db
+*.sqlite
+*.sqlite3
+server/models/
+server/logs/
+
+## Android
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+app/release/
+captures/
+.cxx/
+
+## Common
+.DS_Store
+Thumbs.db
