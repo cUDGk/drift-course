@@ -85,6 +85,11 @@ fun DriftCourseApp() {
                 characterId = null,
                 onBack = { nav.popBackStack() },
                 onOpenConversation = { nav.navigate(Routes.conversation(it)) },
+                // 保存した時だけ AI 対話画面も畳んでホームへ。戻るキーは編集画面 → 対話に戻す。
+                onSaved = {
+                    nav.popBackStack(Routes.CHARACTER_CREATE_CHAT, inclusive = true)
+                        .also { popped -> if (!popped) nav.popBackStack() }
+                },
             )
         }
 
@@ -92,9 +97,11 @@ fun DriftCourseApp() {
             CharacterCreateChatScreen(
                 onBack = { nav.popBackStack() },
                 onFinalize = {
-                    // 対話画面を pop して `character/new` に差し替える。
+                    // AI 対話をバックスタックに残したまま編集画面を開く。
+                    // 戻るキーを押せば AI 対話に戻って追加のやり取りができる。
+                    // 再 finalize でも前回の編集画面は剥がして新しいプリフィルで開き直す。
                     nav.navigate(Routes.CHARACTER_NEW) {
-                        popUpTo(Routes.CHARACTER_CREATE_CHAT) { inclusive = true }
+                        popUpTo(Routes.CHARACTER_CREATE_CHAT) { inclusive = false }
                     }
                 },
             )
