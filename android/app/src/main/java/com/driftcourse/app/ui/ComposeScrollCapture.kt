@@ -52,8 +52,13 @@ fun Modifier.scrollCaptureProvider(
         DisposableEffect(view, lazyListState) {
             val cb = ComposeScrollCaptureCallback(view, lazyListState, boundsHolder)
             view.setScrollCaptureCallback(cb)
+            // Compose 内部スクロールは OS からは見えないので「この View はキャプチャ対象」と明示する。
+            // 明示しないとヒューリスティックで候補から外れて「キャプチャを拡大」ボタンが出ない。
+            val prevHint = view.scrollCaptureHint
+            view.scrollCaptureHint = View.SCROLL_CAPTURE_HINT_INCLUDE
             onDispose {
                 view.setScrollCaptureCallback(null)
+                view.scrollCaptureHint = prevHint
                 cb.dispose()
             }
         }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -95,7 +97,10 @@ fun ConversationScreen(
         ?.takeIf { it.role == "assistant" }?.content?.length ?: 0
     val showLoadingAvatar = streaming && lastAssistantLen < 4
 
-    var noteMode by rememberSaveable { mutableStateOf(false) }
+    // CHAT: 通常のバブル左右振り分け
+    // NOTE_SIDED: 枠なし、ただし発言者で左右に寄せる
+    // NOTE_FLAT: 枠なし、全て左寄せの文書形式
+    var displayMode by rememberSaveable { mutableStateOf(DisplayMode.CHAT) }
 
     // 長押しで開くアクションシートと、編集/分岐のダイアログ状態。
     var menuFor by remember { mutableStateOf<UiMessage?>(null) }
@@ -137,12 +142,18 @@ fun ConversationScreen(
                 }
             },
             actions = {
-                IconButton(onClick = { noteMode = !noteMode }) {
-                    // 押したら切り替わる先のアイコンを出す (常に「現在の反対モード」を示す)。
-                    if (noteMode) {
-                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "チャット表示に切替")
-                    } else {
-                        Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = "ノート表示に切替")
+                IconButton(onClick = {
+                    displayMode = when (displayMode) {
+                        DisplayMode.CHAT -> DisplayMode.NOTE_SIDED
+                        DisplayMode.NOTE_SIDED -> DisplayMode.NOTE_FLAT
+                        DisplayMode.NOTE_FLAT -> DisplayMode.CHAT
+                    }
+                }) {
+                    // 次に切り替わるモードのアイコンを表示する。
+                    when (displayMode) {
+                        DisplayMode.CHAT -> Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = "枠なし (左右) 表示")
+                        DisplayMode.NOTE_SIDED -> Icon(Icons.Default.Article, contentDescription = "ノート (左寄せ) 表示")
+                        DisplayMode.NOTE_FLAT -> Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "チャット表示")
                     }
                 }
                 IconButton(onClick = { onOpenMemory(conversationId) }) {
@@ -172,14 +183,18 @@ fun ConversationScreen(
         Box(modifier = Modifier.weight(1f)) {
             if (messages.isEmpty()) {
                 EmptyConv()
-            } else if (noteMode) {
-                NoteListLocal(
+            } else when (displayMode) {
+                DisplayMode.NOTE_FLAT -> NoteListLocal(
                     messages = messages,
                     modelName = characterName,
                     onLongPress = { msg -> menuFor = msg },
                 )
-            } else {
-                MessageListLocal(
+                DisplayMode.NOTE_SIDED -> NoteSidedListLocal(
+                    messages = messages,
+                    modelName = characterName,
+                    onLongPress = { msg -> menuFor = msg },
+                )
+                DisplayMode.CHAT -> MessageListLocal(
                     messages = messages,
                     streaming = streaming,
                     onLongPress = { msg -> menuFor = msg },
@@ -382,7 +397,8 @@ private fun MessageBubbleLocal(
             color = bg,
             contentColor = fg,
             modifier = Modifier
-                .fillMaxWidth(0.85f)
+                // 内容に応じて幅が変わる (短い発言ほど端に寄る)。上限だけ指定。
+                .widthIn(max = 300.dp)
                 .combinedClickable(
                     enabled = longPressEnabled,
                     onClick = {},
@@ -572,3 +588,49 @@ private fun LoadingAvatarOverlay(
         }
     }
 }
+
+enum class DisplayMode { CHAT, NOTE_SIDED, NOTE_FLAT }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NoteSidedListLocal(
+    messages: List<UiMessage>,
+    modelName: String,
+    onLongPress: (UiMessage) -> Unit,
+) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .scrollCaptureProvider(lazyListState = listState, itemCount = messages.size),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(messages) { msg ->
+            val isUser = msg.role == "user"
+            val label = if (isUser) "あなた" else (modelName.ifBlank { "モデル" })
+            val body = buildString {
+                append("**").append(label).append("**\n\n").append(msg.content)
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        enabled = msg.id != null,
+                        onClick = {},
+                        onLongClick = { onLongPress(msg) },
+                    ),
+                horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+            ) {
+                Box(modifier = Modifier.widthIn(max = 320.dp)) {
+                    MarkdownText(text = body, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+    }
+}
+
