@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,7 +45,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-private val STRUCTURED_KEYS = setOf("description", "personality", "scenario", "first_mes", "mes_example")
+private val STRUCTURED_KEYS = setOf("description", "personality", "scenario", "first_mes", "mes_example", "memory")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +53,7 @@ fun CharacterEditScreen(
     characterId: String?,
     onBack: () -> Unit,
     onOpenConversation: (String) -> Unit,
+    onEditByChat: (() -> Unit)? = null,
     vm: CharacterEditVM = viewModel(),
 ) {
     val character by vm.character.collectAsStateWithLifecycle()
@@ -75,6 +77,7 @@ fun CharacterEditScreen(
     var scenario by remember { mutableStateOf(initialDraft?.scenario.orEmpty()) }
     var firstMes by remember { mutableStateOf(initialDraft?.first_mes.orEmpty()) }
     var mesExample by remember { mutableStateOf(initialDraft?.mes_example.orEmpty()) }
+    var memoryText by remember { mutableStateOf(initialDraft?.memory.orEmpty()) }
     var originalCard by remember { mutableStateOf(JsonObject(emptyMap())) }
     var hydrated by remember { mutableStateOf(characterId == null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -94,6 +97,7 @@ fun CharacterEditScreen(
             scenario = readCardString(c.card, "scenario")
             firstMes = readCardString(c.card, "first_mes")
             mesExample = readCardString(c.card, "mes_example")
+            memoryText = readCardString(c.card, "memory")
             hydrated = true
         }
     }
@@ -101,7 +105,7 @@ fun CharacterEditScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (characterId == null) "新規キャラクター" else "キャラクター編集") },
+                title = { Text(if (characterId == null) "新規モデル" else "モデル編集") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
@@ -129,6 +133,18 @@ fun CharacterEditScreen(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     )
+                }
+            }
+
+            if (characterId != null && onEditByChat != null) {
+                OutlinedButton(
+                    onClick = onEditByChat,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                    Spacer(Modifier.padding(horizontal = 4.dp))
+                    Text("AI で編集")
                 }
             }
 
@@ -194,10 +210,19 @@ fun CharacterEditScreen(
                     .heightIn(min = 120.dp),
             )
 
+            OutlinedTextField(
+                value = memoryText,
+                onValueChange = { memoryText = it },
+                label = { Text("記憶") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 140.dp),
+            )
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val card = mergeCard(originalCard, description, personality, scenario, firstMes, mesExample)
+                        val card = mergeCard(originalCard, description, personality, scenario, firstMes, mesExample, memoryText)
                         if (characterId == null) {
                             vm.create(name.trim(), systemPrompt, card) { onBack() }
                         } else {
@@ -222,7 +247,7 @@ fun CharacterEditScreen(
             if (characterId != null) {
                 Spacer(Modifier.padding(vertical = 4.dp))
                 Text(
-                    "会話",
+                    "対話",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
@@ -236,7 +261,7 @@ fun CharacterEditScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("新しい会話")
+                    Text("新しい対話")
                 }
                 conversations.forEach { conv ->
                     ConversationRow(conv, onClick = { onOpenConversation(conv.id) })
@@ -248,8 +273,8 @@ fun CharacterEditScreen(
     if (confirmDelete && characterId != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("キャラクターを削除しますか？") },
-            text = { Text("このキャラクターと紐づく会話も全て失われます。") },
+            title = { Text("モデルを削除しますか？") },
+            text = { Text("このモデルと紐づく対話も全て失われます。") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
@@ -299,6 +324,7 @@ private fun mergeCard(
     scenario: String,
     firstMes: String,
     mesExample: String,
+    memory: String,
 ): JsonObject {
     val merged = LinkedHashMap<String, kotlinx.serialization.json.JsonElement>()
     original.forEach { (k, v) ->
@@ -309,5 +335,6 @@ private fun mergeCard(
     if (scenario.isNotEmpty()) merged["scenario"] = JsonPrimitive(scenario)
     if (firstMes.isNotEmpty()) merged["first_mes"] = JsonPrimitive(firstMes)
     if (mesExample.isNotEmpty()) merged["mes_example"] = JsonPrimitive(mesExample)
+    if (memory.isNotEmpty()) merged["memory"] = JsonPrimitive(memory)
     return JsonObject(merged)
 }

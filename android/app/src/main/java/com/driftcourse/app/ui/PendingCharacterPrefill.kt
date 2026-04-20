@@ -17,6 +17,7 @@ data class CharacterDraft(
     val scenario: String = "",
     val first_mes: String = "",
     val mes_example: String = "",
+    val memory: String = "",
 )
 
 object PendingCharacterPrefill {

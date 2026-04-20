@@ -208,23 +208,24 @@ class CharacterCreateChatVM(app: Application) : AndroidViewModel(app) {
         private const val TAG = "CharCreateChatVM"
 
         private const val OPENING_LINE =
-            "どんなキャラクターを作りましょうか？ 名前・性格・舞台設定など、思いつく範囲で自由に教えてください。まだ決まってない部分はあとで一緒に詰めていきましょう。"
+            "どんなモデルを作りましょうか？ 名前・性格・舞台設定など、思いつく範囲で自由に教えてください。まだ決まってない部分はあとで一緒に詰めていきましょう。"
 
         private const val FINALIZE_INSTRUCTION =
             "これまでの内容を最終化してください。JSON だけで返してください。"
 
         private val SYSTEM_PROMPT = """
-            あなたはキャラクター設計アシスタントです。ユーザーの要望を対話で引き出し、以下の5項目に落とし込むのがゴールです:
+            あなたはキャラクター設計アシスタントです。ユーザーの要望を対話で引き出し、以下の項目に落とし込むのがゴールです:
             - name (日本語の名前)
             - description (人物説明、背景、外見など)
             - personality (性格、口調、癖)
-            - scenario (ユーザーとキャラが置かれた状況・舞台)
-            - first_mes (ユーザーへの初回挨拶、キャラの口調で書く)
-            - mes_example (例会話。ユーザーとキャラのやり取りを数ターン)
+            - scenario (ユーザーとモデルが置かれた状況・舞台)
+            - first_mes (ユーザーへの初回挨拶、モデルの口調で書く)
+            - mes_example (例会話。ユーザーとモデルのやり取りを数ターン)
+            - memory (モデルが覚えておくべき固有の事実・出来事)
 
             対話中は、不足している項目があれば自然に質問してください。長々と全部聞かず、1ターンに2〜3質問まで。ユーザーの言葉を尊重し、こちらで勝手に付け足しすぎない。
             「最終化してください」「この内容で」「JSON で」のような指示が来た場合のみ、厳密に以下のフォーマットで JSON のみを返してください (前置き・説明・```json コードフェンス禁止):
-            {"name":"...","description":"...","personality":"...","scenario":"...","first_mes":"...","mes_example":"..."}
+            {"name":"...","description":"...","personality":"...","scenario":"...","first_mes":"...","mes_example":"...","memory":"..."}
         """.trimIndent()
     }
 }

@@ -34,7 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 private data class Layer(val key: String, val label: String)
 
 private val LAYERS = listOf(
-    Layer("char", "キャラ"),
+    Layer("char", "モデル"),
     Layer("recent", "直近"),
     Layer("mid", "中期"),
     Layer("long", "長期"),

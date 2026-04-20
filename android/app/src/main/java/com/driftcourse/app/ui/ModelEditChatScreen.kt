@@ -23,10 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,7 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,18 +54,23 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationScreen(
-    conversationId: String,
+fun ModelEditChatScreen(
+    modelId: String,
     onBack: () -> Unit,
-    onOpenMemory: (String) -> Unit,
-    vm: ConversationVM = viewModel(),
+    onDone: () -> Unit,
+    vm: ModelEditChatVM = viewModel(),
 ) {
-    val conversation by vm.conversation.collectAsStateWithLifecycle()
     val messages by vm.messages.collectAsStateWithLifecycle()
     val streaming by vm.streaming.collectAsStateWithLifecycle()
+    val finalizing by vm.finalizing.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val done by vm.done.collectAsStateWithLifecycle()
 
-    LaunchedEffect(conversationId) { vm.load(conversationId) }
+    LaunchedEffect(modelId) { vm.load(modelId) }
+    LaunchedEffect(done) { if (done) onDone() }
+
+    val hasUserTurn = messages.any { it.role == "user" }
+    val canFinalize = !streaming && !finalizing && hasUserTurn
 
     Column(
         modifier = Modifier
@@ -74,26 +80,11 @@ fun ConversationScreen(
     ) {
         TopAppBar(
             title = {
-                Column {
-                    Text(
-                        conversation?.title?.ifBlank { "(無題)" } ?: "…",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDotLocal(streaming = streaming, hasError = error != null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = when {
-                                error != null -> "エラー"
-                                streaming -> "生成中…"
-                                else -> "待機中"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                Text(
+                    "AI で編集",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
@@ -101,8 +92,8 @@ fun ConversationScreen(
                 }
             },
             actions = {
-                IconButton(onClick = { onOpenMemory(conversationId) }) {
-                    Icon(Icons.Default.Memory, contentDescription = "記憶")
+                IconButton(onClick = vm::finalize, enabled = canFinalize) {
+                    Icon(Icons.Default.Check, contentDescription = "この内容で保存")
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -126,15 +117,44 @@ fun ConversationScreen(
         }
 
         Box(modifier = Modifier.weight(1f)) {
-            if (messages.isEmpty()) {
-                EmptyConv()
-            } else {
-                MessageListLocal(messages = messages, streaming = streaming)
+            EditChatList(messages = messages, streaming = streaming)
+        }
+
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilledTonalButton(
+                    onClick = vm::finalize,
+                    enabled = canFinalize,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    if (finalizing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("まとめています…")
+                    } else {
+                        Icon(Icons.Default.Check, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("この内容で保存")
+                    }
+                }
             }
         }
 
-        ComposerLocal(
-            streaming = streaming,
+        EditChatComposer(
+            streaming = streaming || finalizing,
             onSend = vm::send,
             onCancel = vm::cancel,
         )
@@ -142,34 +162,7 @@ fun ConversationScreen(
 }
 
 @Composable
-private fun StatusDotLocal(streaming: Boolean, hasError: Boolean) {
-    val color = when {
-        hasError -> MaterialTheme.colorScheme.error
-        streaming -> Color(0xFFFF9500)
-        else -> Color(0xFF34C759)
-    }
-    Box(
-        modifier = Modifier
-            .size(8.dp)
-            .clip(RoundedCornerShape(50))
-            .background(color),
-    )
-}
-
-@Composable
-private fun EmptyConv() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            "最初のメッセージを送ると対話が始まります。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(24.dp),
-        )
-    }
-}
-
-@Composable
-private fun MessageListLocal(messages: List<UiMessage>, streaming: Boolean) {
+private fun EditChatList(messages: List<UiMessage>, streaming: Boolean) {
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
         if (messages.isNotEmpty()) {
@@ -182,14 +175,12 @@ private fun MessageListLocal(messages: List<UiMessage>, streaming: Boolean) {
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(messages) { msg ->
-            MessageBubbleLocal(msg = msg, streaming = streaming)
-        }
+        items(messages) { msg -> EditChatBubble(msg = msg, streaming = streaming) }
     }
 }
 
 @Composable
-private fun MessageBubbleLocal(msg: UiMessage, streaming: Boolean) {
+private fun EditChatBubble(msg: UiMessage, streaming: Boolean) {
     val isUser = msg.role == "user"
     val shape = if (isUser) {
         RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
@@ -223,7 +214,7 @@ private fun MessageBubbleLocal(msg: UiMessage, streaming: Boolean) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ComposerLocal(
+private fun EditChatComposer(
     streaming: Boolean,
     onSend: (String) -> Unit,
     onCancel: () -> Unit,

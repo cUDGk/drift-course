@@ -18,16 +18,21 @@ import kotlinx.coroutines.flow.first
 
 private object Routes {
     const val SETTINGS = "settings"
-    const val CONVERSATIONS = "conversations"
-    const val CHARACTERS = "characters"
+    const val ROOT = "root"
     const val CHARACTER_NEW = "character/new"
     const val CHARACTER_CREATE_CHAT = "character/create-chat"
     const val CHARACTER_EDIT = "character/{id}"
+    const val MODEL_DETAIL = "model/{id}"
+    const val MODEL_EDIT_CHAT = "model/edit-chat/{modelId}"
+    const val GHOST = "ghost/{modelId}"
     const val CONVERSATION = "conversation/{id}"
     const val MEMORY = "memory/{convId}"
     const val DEBUG_CHAT = "chat"
 
     fun characterEdit(id: String) = "character/$id"
+    fun modelDetail(id: String) = "model/$id"
+    fun modelEditChat(id: String) = "model/edit-chat/$id"
+    fun ghost(id: String) = "ghost/$id"
     fun conversation(id: String) = "conversation/$id"
     fun memory(convId: String) = "memory/$convId"
 }
@@ -41,7 +46,7 @@ fun DriftCourseApp() {
     var start by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         val s = store.flow.first()
-        start = if (s.token.isBlank()) Routes.SETTINGS else Routes.CONVERSATIONS
+        start = if (s.token.isBlank()) Routes.SETTINGS else Routes.ROOT
     }
 
     val startDest = start ?: return
@@ -51,29 +56,27 @@ fun DriftCourseApp() {
             SettingsScreen(
                 onBack = {
                     if (!nav.popBackStack()) {
-                        nav.navigate(Routes.CONVERSATIONS) {
+                        nav.navigate(Routes.ROOT) {
                             popUpTo(Routes.SETTINGS) { inclusive = true }
                         }
                     }
                 },
-                onOpenCharacters = { nav.navigate(Routes.CHARACTERS) },
+                onOpenCharacters = {
+                    nav.navigate(Routes.ROOT) {
+                        popUpTo(Routes.SETTINGS) { inclusive = true }
+                    }
+                },
                 onOpenDebugChat = { nav.navigate(Routes.DEBUG_CHAT) },
             )
         }
 
-        composable(Routes.CONVERSATIONS) {
-            ConversationsHomeScreen(
+        composable(Routes.ROOT) {
+            RootScaffold(
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                onOpenCharacterNew = { nav.navigate(Routes.CHARACTER_NEW) },
+                onOpenCharacterCreateChat = { nav.navigate(Routes.CHARACTER_CREATE_CHAT) },
                 onOpenConversation = { nav.navigate(Routes.conversation(it)) },
-            )
-        }
-
-        composable(Routes.CHARACTERS) {
-            CharacterListScreen(
-                onBack = { nav.popBackStack() },
-                onOpenCharacter = { nav.navigate(Routes.characterEdit(it)) },
-                onNewCharacter = { nav.navigate(Routes.CHARACTER_NEW) },
-                onNewCharacterByChat = { nav.navigate(Routes.CHARACTER_CREATE_CHAT) },
+                onOpenModel = { nav.navigate(Routes.modelDetail(it)) },
             )
         }
 
@@ -89,7 +92,7 @@ fun DriftCourseApp() {
             CharacterCreateChatScreen(
                 onBack = { nav.popBackStack() },
                 onFinalize = {
-                    // 対話画面を popして `character/new` に差し替える。
+                    // 対話画面を pop して `character/new` に差し替える。
                     nav.navigate(Routes.CHARACTER_NEW) {
                         popUpTo(Routes.CHARACTER_CREATE_CHAT) { inclusive = true }
                     }
@@ -106,6 +109,48 @@ fun DriftCourseApp() {
                 characterId = id,
                 onBack = { nav.popBackStack() },
                 onOpenConversation = { nav.navigate(Routes.conversation(it)) },
+                onEditByChat = { nav.navigate(Routes.modelEditChat(id)) },
+            )
+        }
+
+        composable(
+            route = Routes.MODEL_DETAIL,
+            arguments = listOf(navArgument("id") { type = NavType.StringType }),
+        ) { entry ->
+            val id = entry.arguments?.getString("id").orEmpty()
+            ModelDetailScreen(
+                modelId = id,
+                onBack = { nav.popBackStack() },
+                onOpenConversation = { nav.navigate(Routes.conversation(it)) },
+                onStartGhost = { nav.navigate(Routes.ghost(it)) },
+                onOpenManage = { nav.navigate(Routes.characterEdit(it)) },
+            )
+        }
+
+        composable(
+            route = Routes.MODEL_EDIT_CHAT,
+            arguments = listOf(navArgument("modelId") { type = NavType.StringType }),
+        ) { entry ->
+            val id = entry.arguments?.getString("modelId").orEmpty()
+            ModelEditChatScreen(
+                modelId = id,
+                onBack = { nav.popBackStack() },
+                onDone = {
+                    nav.navigate(Routes.modelDetail(id)) {
+                        popUpTo(Routes.MODEL_EDIT_CHAT) { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable(
+            route = Routes.GHOST,
+            arguments = listOf(navArgument("modelId") { type = NavType.StringType }),
+        ) { entry ->
+            val id = entry.arguments?.getString("modelId").orEmpty()
+            GhostChatScreen(
+                modelId = id,
+                onBack = { nav.popBackStack() },
             )
         }
 

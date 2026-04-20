@@ -1,6 +1,8 @@
 package com.driftcourse.app.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,12 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,12 +33,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,10 +48,8 @@ import com.driftcourse.app.net.Character
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterListScreen(
-    onBack: () -> Unit,
-    onOpenCharacter: (String) -> Unit,
-    onNewCharacter: () -> Unit,
-    onNewCharacterByChat: () -> Unit = {},
+    onOpenSettings: () -> Unit,
+    onOpenModel: (String) -> Unit,
     vm: CharacterListVM = viewModel(),
 ) {
     val characters by vm.characters.collectAsStateWithLifecycle()
@@ -63,28 +61,13 @@ fun CharacterListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("キャラクター", fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                title = { Text("モデル一覧", fontWeight = FontWeight.SemiBold) },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "設定")
                     }
                 },
             )
-        },
-        floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                ExtendedFloatingActionButton(
-                    onClick = onNewCharacterByChat,
-                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
-                    text = { Text("AI で作成") },
-                )
-                FloatingActionButton(onClick = onNewCharacter) {
-                    Icon(Icons.Default.Add, contentDescription = "新規キャラクター")
-                }
-            }
         },
     ) { inner ->
         Column(
@@ -109,13 +92,17 @@ fun CharacterListScreen(
                 }
             }
             if (characters.isEmpty() && !loading) {
-                EmptyCharacterState(onNewCharacter)
+                EmptyModelState()
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(vertical = 8.dp),
                 ) {
                     items(characters, key = { it.id }) { c ->
-                        CharacterRow(c, onClick = { onOpenCharacter(c.id) })
+                        CharacterRow(
+                            character = c,
+                            onOpen = { onOpenModel(c.id) },
+                            onDelete = { vm.delete(c.id) },
+                        )
                     }
                 }
             }
@@ -124,7 +111,7 @@ fun CharacterListScreen(
 }
 
 @Composable
-private fun EmptyCharacterState(onNewCharacter: () -> Unit) {
+private fun EmptyModelState() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -132,41 +119,34 @@ private fun EmptyCharacterState(onNewCharacter: () -> Unit) {
             modifier = Modifier.padding(24.dp),
         ) {
             Text(
-                "まだキャラクターがありません",
+                "まだモデルがありません",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "右下の + から最初のキャラクターを作成してください。",
+                "「モデル作成」タブから最初のモデルを作成してください。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Box(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable(onClick = onNewCharacter)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            ) {
-                Text(
-                    "最初のキャラクターを作成",
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CharacterRow(character: Character, onClick: () -> Unit) {
+private fun CharacterRow(
+    character: Character,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .pointerInput(character.id) {
-                detectTapGestures(onTap = { onClick() })
-            },
+            .combinedClickable(
+                onClick = onOpen,
+                onLongClick = { menuOpen = true },
+            ),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
@@ -187,6 +167,15 @@ private fun CharacterRow(character: Character, onClick: () -> Unit) {
                     formatEpochSeconds(character.updatedAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("削除") },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    },
                 )
             }
         }

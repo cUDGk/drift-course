@@ -86,16 +86,32 @@ async def patch_memory(convid: str, layer: str, body: MemoryPatch, request: Requ
     return {"status": "ok"}
 
 
+CARD_LABELS = [
+    ("description", "人物"),
+    ("personality", "性格"),
+    ("scenario", "状況"),
+    ("first_mes", "初回挨拶"),
+    ("mes_example", "例会話"),
+    ("memory", "記憶"),
+]
+
+
 def _compose_system(character: dict[str, Any], memory: dict[str, str]) -> str:
-    # DRIFT の 4 層メモリをそのまま順に system に流し込む。
+    # DRIFT の 4 層メモリ + カード項目をラベル付き日本語セクションとして結合する。
     # サイズ管理は将来の要約ジョブ (priority=low) で行う前提で今は単純結合。
     parts: list[str] = []
     if character.get("system_prompt"):
-        parts.append(character["system_prompt"])
+        parts.append(character["system_prompt"].strip())
     card = character.get("card") or {}
-    if card:
-        parts.append(f"[character_card]\n{json.dumps(card, ensure_ascii=False, indent=2)}")
-    for layer_name, label in (("long", "long_term_memory"), ("mid", "mid_term_summary"), ("recent", "recent_notes")):
+    for key, label in CARD_LABELS:
+        v = card.get(key)
+        if isinstance(v, str) and v.strip():
+            parts.append(f"[{label}]\n{v.strip()}")
+    known = {kk for kk, _ in CARD_LABELS}
+    extras = {k: v for k, v in card.items() if k not in known}
+    if extras:
+        parts.append(f"[その他]\n{json.dumps(extras, ensure_ascii=False, indent=2)}")
+    for layer_name, label in (("long", "長期記憶"), ("mid", "中期要約"), ("recent", "直近")):
         if memory.get(layer_name):
             parts.append(f"[{label}]\n{memory[layer_name]}")
     return "\n\n".join(parts).strip()

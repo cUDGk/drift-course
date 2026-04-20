@@ -71,7 +71,7 @@ fun ConversationsHomeScreen(
                     if (!busy) vm.createNew { onOpenConversation(it.id) }
                 },
             ) {
-                Icon(Icons.Default.Add, contentDescription = "新しい会話")
+                Icon(Icons.Default.Add, contentDescription = "新しい対話")
             }
         },
     ) { inner ->
@@ -122,7 +122,7 @@ private fun EmptyConversationsState() {
             modifier = Modifier.padding(24.dp),
         ) {
             Text(
-                "まだ会話がありません",
+                "まだ対話がありません",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )

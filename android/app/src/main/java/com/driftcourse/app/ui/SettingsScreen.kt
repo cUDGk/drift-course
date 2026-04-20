@@ -171,7 +171,7 @@ fun SettingsScreen(
                 onClick = onOpenCharacters,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("キャラクター管理")
+                Text("モデル管理")
             }
 
             TextButton(

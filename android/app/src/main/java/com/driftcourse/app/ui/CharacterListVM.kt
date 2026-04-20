@@ -61,4 +61,20 @@ class CharacterListVM(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    fun delete(id: String) {
+        viewModelScope.launch {
+            val cfg = settings.flow.first()
+            currentUrl = cfg.url
+            currentToken = cfg.token
+            _error.value = null
+            try {
+                api.deleteCharacter(id)
+                _characters.value = _characters.value.filterNot { it.id == id }
+            } catch (t: Throwable) {
+                Log.e("CharacterListVM", "delete failed", t)
+                _error.value = t.message ?: "削除に失敗しました"
+            }
+        }
+    }
 }
