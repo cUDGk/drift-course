@@ -1,0 +1,123 @@
+package com.driftcourse.app.ui
+
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.driftcourse.app.net.Conversation
+import com.driftcourse.app.net.DriftApi
+import com.driftcourse.app.net.PostMessage
+import com.driftcourse.app.net.SseClient
+import com.driftcourse.app.settings.SettingsStore
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
+class ConversationVM(app: Application) : AndroidViewModel(app) {
+    private val settings = SettingsStore(app)
+    private var currentUrl = ""
+    private var currentToken = ""
+    private val api = DriftApi(
+        baseUrlProvider = { currentUrl },
+        tokenProvider = { currentToken },
+    )
+    private val sse = SseClient(
+        baseUrlProvider = { currentUrl },
+        tokenProvider = { currentToken },
+    )
+
+    private val _conversation = MutableStateFlow<Conversation?>(null)
+    val conversation: StateFlow<Conversation?> = _conversation.asStateFlow()
+
+    private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
+    val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
+
+    private val _streaming = MutableStateFlow(false)
+    val streaming: StateFlow<Boolean> = _streaming.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private var convId: String? = null
+    private var streamJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            settings.flow.collect {
+                currentUrl = it.url
+                currentToken = it.token
+            }
+        }
+    }
+
+    fun load(id: String) {
+        if (convId == id && _messages.value.isNotEmpty()) return
+        convId = id
+        viewModelScope.launch {
+            refreshCfg()
+            _error.value = null
+            try {
+                _conversation.value = api.getConversation(id)
+                _messages.value = api.listMessages(id).map { UiMessage(it.role, it.content) }
+            } catch (t: Throwable) {
+                Log.e("ConversationVM", "load failed", t)
+                _error.value = t.message ?: "load error"
+            }
+        }
+    }
+
+    fun send(text: String) {
+        val id = convId ?: return
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || _streaming.value) return
+        viewModelScope.launch {
+            refreshCfg()
+            if (currentToken.isBlank()) {
+                _error.value = "token が未設定です"
+                return@launch
+            }
+            val userMsg = UiMessage("user", trimmed)
+            val assistant = UiMessage("assistant", "")
+            _messages.value = _messages.value + userMsg + assistant
+            _error.value = null
+            _streaming.value = true
+            streamJob = launch {
+                val buf = StringBuilder()
+                try {
+                    sse.convMessage(id, PostMessage(content = trimmed)).collect { delta ->
+                        buf.append(delta)
+                        updateLastAssistant(buf.toString())
+                    }
+                } catch (t: Throwable) {
+                    Log.e("ConversationVM", "stream failed", t)
+                    _error.value = t.message ?: "stream error"
+                    updateLastAssistant(buf.toString() + "\n\n[error] ${t.message ?: t::class.java.simpleName}")
+                } finally {
+                    _streaming.value = false
+                }
+            }
+        }
+    }
+
+    fun cancel() {
+        streamJob?.cancel()
+        _streaming.value = false
+    }
+
+    private fun updateLastAssistant(content: String) {
+        val list = _messages.value.toMutableList()
+        val idx = list.indexOfLast { it.role == "assistant" }
+        if (idx < 0) return
+        list[idx] = list[idx].copy(content = content)
+        _messages.value = list
+    }
+
+    private suspend fun refreshCfg() {
+        val cfg = settings.flow.first()
+        currentUrl = cfg.url
+        currentToken = cfg.token
+    }
+}

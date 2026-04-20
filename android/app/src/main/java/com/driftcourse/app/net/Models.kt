@@ -2,6 +2,7 @@ package com.driftcourse.app.net
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class ChatMessage(
@@ -56,4 +57,73 @@ data class ModelsResponse(
     val current: String,
     val draft: String,
     val available: List<ModelInfo>,
+)
+
+@Serializable
+data class Character(
+    val id: String,
+    val name: String,
+    @SerialName("system_prompt") val systemPrompt: String,
+    val card: JsonObject = JsonObject(emptyMap()),
+    @SerialName("created_at") val createdAt: Long,
+    @SerialName("updated_at") val updatedAt: Long,
+)
+
+@Serializable
+data class CharacterIn(
+    val name: String,
+    @SerialName("system_prompt") val systemPrompt: String = "",
+    val card: JsonObject = JsonObject(emptyMap()),
+)
+
+@Serializable
+data class CharacterPatch(
+    val name: String? = null,
+    @SerialName("system_prompt") val systemPrompt: String? = null,
+    val card: JsonObject? = null,
+)
+
+@Serializable
+data class Conversation(
+    val id: String,
+    @SerialName("character_id") val characterId: String,
+    val title: String,
+    @SerialName("created_at") val createdAt: Long,
+    @SerialName("updated_at") val updatedAt: Long,
+)
+
+@Serializable
+data class NewConversation(
+    @SerialName("character_id") val characterId: String,
+    val title: String = "",
+)
+
+@Serializable
+data class Message(
+    val id: String,
+    @SerialName("conversation_id") val conversationId: String,
+    val role: String,
+    val content: String,
+    @SerialName("created_at") val createdAt: Long,
+)
+
+@Serializable
+data class PostMessage(
+    val content: String,
+    val temperature: Float = 0.7f,
+    @SerialName("top_p") val topP: Float = 0.9f,
+    @SerialName("max_tokens") val maxTokens: Int = 1024,
+)
+
+@Serializable
+data class MemorySnapshot(
+    val char: String = "",
+    val recent: String = "",
+    val mid: String = "",
+    val long: String = "",
+)
+
+@Serializable
+data class MemoryPatch(
+    val content: String,
 )

@@ -18,7 +18,17 @@ class SseClient(
      * `data: {...}` のバイト境界が行で割れるので BufferedSource.readUtf8Line で 1 行ずつ読む。
      * `data: [DONE]` で終端。choices[0].delta.content が欠けている chunk (role のみ等) は黙って飛ばす。
      */
-    fun chat(messages: List<ChatMessage>): Flow<String> = callbackFlow {
+    fun chat(messages: List<ChatMessage>): Flow<String> = stream(
+        path = "/v1/chat",
+        jsonBody = driftJson.encodeToString(ChatRequest.serializer(), ChatRequest(messages = messages)),
+    )
+
+    fun convMessage(convId: String, body: PostMessage): Flow<String> = stream(
+        path = "/conversations/$convId/messages",
+        jsonBody = driftJson.encodeToString(PostMessage.serializer(), body),
+    )
+
+    private fun stream(path: String, jsonBody: String): Flow<String> = callbackFlow {
         val baseUrl = normalizeBaseUrl(baseUrlProvider())
         val token = tokenProvider()
         if (token.isBlank()) {
@@ -26,16 +36,12 @@ class SseClient(
             return@callbackFlow
         }
 
-        val body = driftJson.encodeToString(
-            ChatRequest.serializer(),
-            ChatRequest(messages = messages),
-        ).toRequestBody("application/json; charset=utf-8".toMediaType())
-
+        val requestBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
-            .url("$baseUrl/v1/chat")
+            .url("$baseUrl$path")
             .header("Authorization", "Bearer $token")
             .header("Accept", "text/event-stream")
-            .post(body)
+            .post(requestBody)
             .build()
 
         val call = driftHttpClient.newCall(request)
