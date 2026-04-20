@@ -23,7 +23,7 @@ class PostMessage(BaseModel):
     content: str
     temperature: float = 0.7
     top_p: float = 0.9
-    max_tokens: int = 1024
+    max_tokens: int = 4096
 
 
 class MemoryPatch(BaseModel):
@@ -109,11 +109,12 @@ CARD_LABELS = [
     ("first_mes", "初回挨拶"),
     ("mes_example", "例会話"),
     ("memory", "記憶"),
+    ("response_style", "応答のスタイル・分量"),
 ]
 
 # LLM に投げてはいけない内部用キー。`icon` は data URL なので system prompt に流すとトークンを大量に食い潰すし、
 # `bare` は「素モデルです」という UI 向けマーカーで、LLM には無意味。どちらも [その他] にも載せない。
-INTERNAL_CARD_KEYS = {"icon", "bare", "max_tokens"}
+INTERNAL_CARD_KEYS = {"icon", "bare"}
 
 
 def _compose_system(character: dict[str, Any], memory: dict[str, str]) -> str:
@@ -164,15 +165,11 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
     for m in history:
         messages.append({"role": m["role"], "content": m["content"]})
 
-    # モデル側に max_tokens が設定されてればそれを優先。無ければリクエスト body の値。
-    card_max = (character.get("card") or {}).get("max_tokens")
-    effective_max = card_max if isinstance(card_max, int) and card_max > 0 else body.max_tokens
-
     payload = {
         "messages": messages,
         "temperature": body.temperature,
         "top_p": body.top_p,
-        "max_tokens": effective_max,
+        "max_tokens": body.max_tokens,
         "stream": True,
         "cache_prompt": True,
     }

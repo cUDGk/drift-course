@@ -17,6 +17,7 @@ private val CARD_LABELS: List<Pair<String, String>> = listOf(
     "first_mes" to "初回挨拶",
     "mes_example" to "例会話",
     "memory" to "記憶",
+    "response_style" to "応答のスタイル・分量",
 )
 
 fun composeCharacterSystem(character: Character): String {
