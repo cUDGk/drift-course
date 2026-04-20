@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -40,7 +41,15 @@ fun AppBackground(
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (bg) {
-            is Background.Default -> Unit
+            is Background.Default -> {
+                // Scaffold を transparent にしてるので、Default でもテーマの背景色を塗る。
+                // これをしないとライト/ダーク切替後も透明のまま下のレイヤが透けて見える。
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                )
+            }
             is Background.Color -> {
                 Box(
                     modifier = Modifier
