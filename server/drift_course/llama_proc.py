@@ -23,6 +23,7 @@ class LlamaServer:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.proc: subprocess.Popen[bytes] | None = None
+        self._log_fh = None
         self.current_model: str = settings.default_model
         self.current_draft: str = settings.default_draft_model
 
@@ -44,8 +45,8 @@ class LlamaServer:
             "--cache-type-v", s.cache_type_v,
             "--cache-reuse", "256",
         ]
-        if s.flash_attn:
-            args.append("-fa")
+        # 新しめの llama.cpp は -fa が on|off|auto を引数に取るので値を明示する。
+        args.extend(["-fa", "on" if s.flash_attn else "off"])
         if draft:
             draft_path = s.models_dir / draft
             args += [
@@ -62,9 +63,12 @@ class LlamaServer:
         draft = draft if draft is not None else self.current_draft
         args = self._build_args(model, draft)
         log.info("starting llama-server: %s", " ".join(args))
+        # llama-server の起動失敗時に原因を追えるよう、stderr は別ファイルに残す。
+        log_path = Path(self.settings.db_path).parent / "llama-server.log"
+        self._log_fh = open(log_path, "wb")  # noqa: SIM115 — 親プロセス終了まで保持
         self.proc = subprocess.Popen(
             args,
-            stdout=subprocess.DEVNULL,
+            stdout=self._log_fh,
             stderr=subprocess.STDOUT,
             cwd=str(Path(self.settings.llama_server_bin).parent),
         )
@@ -101,6 +105,9 @@ class LlamaServer:
                 self.proc.kill()
                 await asyncio.to_thread(self.proc.wait)
         self.proc = None
+        if self._log_fh is not None:
+            self._log_fh.close()
+            self._log_fh = None
 
     async def switch(self, model: str, draft: str | None = None) -> None:
         await self.stop()

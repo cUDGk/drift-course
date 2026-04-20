@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "com.driftcourse.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.driftcourse.app"
         minSdk = 28
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
     }
