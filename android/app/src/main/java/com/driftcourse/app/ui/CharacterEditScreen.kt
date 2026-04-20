@@ -43,8 +43,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.driftcourse.app.net.Conversation
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 
-private val STRUCTURED_KEYS = setOf("gender", "user_address", "description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon", "max_tokens", "response_style")
+private val STRUCTURED_KEYS = setOf("gender", "user_address", "description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon", "max_tokens", "response_style", "no_narration")
 
 private val RESPONSE_STYLE_PRESETS = listOf(
     "1行だけ" to "基本的に1行 (1〜2文) で返答する。情景描写や補足は書かない。",
@@ -89,6 +90,7 @@ fun CharacterEditScreen(
     var memoryText by remember { mutableStateOf(initialDraft?.memory.orEmpty()) }
     var icon by remember { mutableStateOf(initialDraft?.icon.orEmpty()) }
     var responseStyle by remember { mutableStateOf("") }
+    var noNarration by remember { mutableStateOf(false) }
     var originalCard by remember { mutableStateOf(JsonObject(emptyMap())) }
     var hydrated by remember { mutableStateOf(characterId == null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -115,6 +117,7 @@ fun CharacterEditScreen(
             memoryText = readCardString(c.card, "memory")
             icon = readCardString(c.card, "icon")
             responseStyle = readCardString(c.card, "response_style")
+            noNarration = (c.card["no_narration"] as? JsonPrimitive)?.booleanOrNull == true
             hydrated = true
         }
     }
@@ -303,10 +306,28 @@ fun CharacterEditScreen(
                     .heightIn(min = 100.dp),
             )
 
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("ナレーションを書かない", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "ON にするとセリフ本体のみで応答。地の文・動作描写・情景描写が抑止される。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = noNarration,
+                    onCheckedChange = { noNarration = it },
+                )
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val card = mergeCard(originalCard, gender, userAddress, description, personality, scenario, firstMes, mesExample, memoryText, icon, responseStyle)
+                        val card = mergeCard(originalCard, gender, userAddress, description, personality, scenario, firstMes, mesExample, memoryText, icon, responseStyle, noNarration)
                         if (characterId == null) {
                             vm.create(name.trim(), systemPrompt, card) { onBack() }
                         } else {
@@ -408,6 +429,7 @@ private fun mergeCard(
     memory: String,
     icon: String,
     responseStyle: String,
+    noNarration: Boolean,
 ): JsonObject {
     val merged = LinkedHashMap<String, kotlinx.serialization.json.JsonElement>()
     original.forEach { (k, v) ->
@@ -423,5 +445,6 @@ private fun mergeCard(
     if (memory.isNotEmpty()) merged["memory"] = JsonPrimitive(memory)
     if (icon.isNotEmpty()) merged["icon"] = JsonPrimitive(icon)
     if (responseStyle.isNotBlank()) merged["response_style"] = JsonPrimitive(responseStyle)
+    if (noNarration) merged["no_narration"] = JsonPrimitive(true)
     return JsonObject(merged)
 }

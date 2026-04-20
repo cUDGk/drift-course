@@ -114,7 +114,7 @@ CARD_LABELS = [
 
 # LLM に投げてはいけない内部用キー。`icon` は data URL なので system prompt に流すとトークンを大量に食い潰すし、
 # `bare` は「素モデルです」という UI 向けマーカーで、LLM には無意味。どちらも [その他] にも載せない。
-INTERNAL_CARD_KEYS = {"icon", "bare"}
+INTERNAL_CARD_KEYS = {"icon", "bare", "no_narration"}
 
 
 def _compose_system(character: dict[str, Any], memory: dict[str, str]) -> str:
@@ -135,6 +135,13 @@ def _compose_system(character: dict[str, Any], memory: dict[str, str]) -> str:
     }
     if extras:
         parts.append(f"[その他]\n{json.dumps(extras, ensure_ascii=False, indent=2)}")
+    # ナレーション抑制フラグ。true なら地の文を出さない指示を差す。
+    if card.get("no_narration") is True:
+        parts.append(
+            "[ナレーション]\n"
+            "地の文・動作描写・情景描写は書かない。セリフ本体のみで返答する。"
+            "必要なセリフは 「」 で囲む。"
+        )
     for layer_name, label in (("long", "長期記憶"), ("mid", "中期要約"), ("recent", "直近")):
         if memory.get(layer_name):
             parts.append(f"[{label}]\n{memory[layer_name]}")

@@ -1,6 +1,8 @@
 package com.driftcourse.app.net
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -28,6 +30,13 @@ fun composeCharacterSystem(character: Character): String {
     for ((key, label) in CARD_LABELS) {
         val v = readCardString(card, key)
         if (v.isNotBlank()) parts.add("[$label]\n${v.trim()}")
+    }
+    // ナレーション抑制フラグ
+    if ((card["no_narration"] as? JsonPrimitive)?.booleanOrNull == true) {
+        parts.add(
+            "[ナレーション]\n" +
+                "地の文・動作描写・情景描写は書かない。セリフ本体のみで返答する。必要なセリフは 「」 で囲む。"
+        )
     }
     return parts.joinToString("\n\n").trim()
 }
