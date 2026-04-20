@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -55,6 +56,7 @@ fun ModelDetailScreen(
     onOpenConversation: (String) -> Unit,
     onStartGhost: (String) -> Unit,
     onOpenManage: (String) -> Unit,
+    onOpenEdit: (String) -> Unit,
     vm: ModelDetailVM = viewModel(),
 ) {
     val character by vm.character.collectAsStateWithLifecycle()
@@ -76,6 +78,14 @@ fun ModelDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { vm.copy { newChar -> onOpenEdit(newChar.id) } },
+                        enabled = !busy,
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "コピー")
                     }
                 },
             )

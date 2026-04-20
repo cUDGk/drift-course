@@ -213,12 +213,12 @@ class CharacterCreateChatVM(app: Application) : AndroidViewModel(app) {
         private const val FINALIZE_INSTRUCTION =
             "ここまでの内容を以下の JSON だけで返してください。前置き・説明・``` コードフェンス・" +
                 "『はい、わかりました』のような返事は一切禁止。キー: " +
-                "name / description / personality / scenario / first_mes / mes_example / memory。" +
-                "値は日本語の文字列で、未決定の項目は空文字にしてください。"
+                "name / gender / user_address / description / personality / scenario / first_mes / mes_example / memory。" +
+                "値は日本語の文字列で、未決定の項目は空文字にしてください。user_address はユーザの呼び方を自由形式で記述 (例: 通常: あなた\\n怒ってる時: お前)。"
 
         private val SYSTEM_PROMPT = """
             あなたはキャラクター設計アシスタントです。ユーザーと自然な日本語で対話し、以下の要素を引き出すのがゴール:
-            名前・人物説明・性格・状況/舞台・初回挨拶・例会話・覚えておきたい事実 (記憶)。
+            名前・性別・ユーザの呼び方 (シチュエーション別でも可)・人物説明・性格・状況/舞台・初回挨拶・例会話・覚えておきたい事実 (記憶)。
 
             大前提:
             - 通常の対話では必ず自然な日本語の文で応答する。JSON・キー名の列挙・コードブロックは一切禁止。

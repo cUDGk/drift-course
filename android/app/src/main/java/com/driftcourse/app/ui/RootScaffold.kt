@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -55,12 +56,12 @@ fun RootScaffold(
     Scaffold(
         bottomBar = {
             NavigationBar {
-                // 既定の indicator は secondaryContainer (テーマ上はオレンジ系) になるので、
-                // primary 系に差し替えて青基調を保つ。
+                // 選択状態がアイコン色だけでは弱いので、indicator pill も primary 基調の
+                // 半透明に、ラベルも primary + SemiBold で太くして一目で分かるようにする。
                 val itemColors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
                     selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -80,7 +81,14 @@ fun RootScaffold(
                             }
                         },
                         icon = { Icon(tab.icon, contentDescription = null) },
-                        label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
+                        label = {
+                            Text(
+                                tab.label,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                ),
+                            )
+                        },
                         colors = itemColors,
                     )
                 }

@@ -12,6 +12,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CharacterDraft(
     val name: String = "",
+    val gender: String = "",
+    val user_address: String = "",
     val description: String = "",
     val personality: String = "",
     val scenario: String = "",

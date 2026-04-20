@@ -127,3 +127,25 @@ data class MemorySnapshot(
 data class MemoryPatch(
     val content: String,
 )
+
+@Serializable
+data class ForkRequest(
+    @SerialName("from_message_id") val fromMessageId: String,
+    val inclusive: Boolean = false,
+    val title: String = "",
+)
+
+@Serializable
+data class ConversationPatch(
+    val title: String,
+)
+
+@Serializable
+data class MessagePatch(
+    val content: String,
+)
+
+@Serializable
+data class CharacterCopyRequest(
+    val name: String? = null,
+)

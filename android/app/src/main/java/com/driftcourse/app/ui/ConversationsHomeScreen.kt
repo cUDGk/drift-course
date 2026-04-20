@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,9 +26,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -112,6 +115,7 @@ fun ConversationsHomeScreen(
                             character = charactersById[conv.characterId],
                             onOpen = { onOpenConversation(conv.id) },
                             onDelete = { vm.delete(conv.id) },
+                            onRename = { newTitle -> vm.rename(conv.id, newTitle) },
                         )
                     }
                 }
@@ -149,8 +153,10 @@ private fun ConversationHomeRow(
     character: Character?,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
+    onRename: (String) -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var renameOpen by remember { mutableStateOf(false) }
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
@@ -185,6 +191,13 @@ private fun ConversationHomeRow(
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
+                    text = { Text("名前を変更") },
+                    onClick = {
+                        menuOpen = false
+                        renameOpen = true
+                    },
+                )
+                DropdownMenuItem(
                     text = { Text("削除") },
                     onClick = {
                         menuOpen = false
@@ -193,5 +206,29 @@ private fun ConversationHomeRow(
                 )
             }
         }
+    }
+
+    if (renameOpen) {
+        var text by remember(conv.id) { mutableStateOf(conv.title) }
+        AlertDialog(
+            onDismissRequest = { renameOpen = false },
+            title = { Text("名前を変更") },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    renameOpen = false
+                    onRename(text)
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameOpen = false }) { Text("キャンセル") }
+            },
+        )
     }
 }

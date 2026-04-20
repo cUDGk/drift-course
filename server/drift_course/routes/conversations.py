@@ -30,6 +30,20 @@ class MemoryPatch(BaseModel):
     content: str
 
 
+class ForkRequest(BaseModel):
+    from_message_id: str
+    inclusive: bool = False
+    title: str = ""
+
+
+class ConversationPatch(BaseModel):
+    title: str
+
+
+class MessagePatch(BaseModel):
+    content: str
+
+
 @router.get("")
 async def list_conversations(request: Request, character_id: str | None = None) -> list[dict[str, Any]]:
     return request.app.state.db.list_conversations(character_id)
@@ -87,6 +101,8 @@ async def patch_memory(convid: str, layer: str, body: MemoryPatch, request: Requ
 
 
 CARD_LABELS = [
+    ("gender", "性別"),
+    ("user_address", "ユーザの呼び方"),
     ("description", "人物"),
     ("personality", "性格"),
     ("scenario", "状況"),
@@ -194,6 +210,47 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.patch("/{convid}")
+async def patch_conversation(convid: str, body: ConversationPatch, request: Request) -> dict[str, Any]:
+    db = request.app.state.db
+    row = db.update_conversation_title(convid, body.title)
+    if row is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    return row
+
+
+@router.patch("/{convid}/messages/{mid}")
+async def patch_message(convid: str, mid: str, body: MessagePatch, request: Request) -> dict[str, Any]:
+    db = request.app.state.db
+    if db.get_conversation(convid) is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    row = db.update_message_content(convid, mid, body.content)
+    if row is None:
+        raise HTTPException(status_code=404, detail="message not found")
+    return row
+
+
+@router.post("/{convid}/fork")
+async def fork_conversation(convid: str, body: ForkRequest, request: Request) -> dict[str, Any]:
+    db = request.app.state.db
+    src = db.get_conversation(convid)
+    if src is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    title = body.title.strip() if body.title else ""
+    if not title:
+        src_title = src.get("title") or ""
+        title = f"{src_title} (分岐)" if src_title else "(分岐)"
+    new_conv = db.fork_conversation(
+        src_convid=convid,
+        stop_message_id=body.from_message_id,
+        inclusive=body.inclusive,
+        title=title,
+    )
+    if new_conv is None:
+        raise HTTPException(status_code=404, detail="from_message_id not found")
+    return new_conv
 
 
 @router.post("/{convid}/summarize")

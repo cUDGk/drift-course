@@ -188,12 +188,19 @@ private fun GhostBubble(msg: UiMessage, streaming: Boolean) {
             contentColor = fg,
             modifier = Modifier.fillMaxWidth(0.85f),
         ) {
-            val display = if (msg.content.isEmpty() && !isUser && streaming) "…" else msg.content
-            Text(
-                text = display,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            )
+            if (msg.content.isEmpty() && !isUser && streaming) {
+                Text(
+                    text = "…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            } else {
+                MarkdownText(
+                    text = msg.content,
+                    color = fg,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
         }
     }
 }

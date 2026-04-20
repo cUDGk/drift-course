@@ -22,6 +22,10 @@ class CharacterPatch(BaseModel):
     card: dict[str, Any] | None = None
 
 
+class CharacterCopyRequest(BaseModel):
+    name: str | None = None
+
+
 @router.get("")
 async def list_characters(request: Request) -> list[dict[str, Any]]:
     return request.app.state.db.list_characters()
@@ -53,3 +57,16 @@ async def delete_character(cid: str, request: Request) -> dict[str, str]:
     if not request.app.state.db.delete_character(cid):
         raise HTTPException(status_code=404, detail="character not found")
     return {"status": "deleted"}
+
+
+@router.post("/{cid}/copy")
+async def copy_character(
+    cid: str,
+    request: Request,
+    body: CharacterCopyRequest | None = None,
+) -> dict[str, Any]:
+    name = body.name if body is not None else None
+    row = request.app.state.db.copy_character(cid, name)
+    if row is None:
+        raise HTTPException(status_code=404, detail="character not found")
+    return row

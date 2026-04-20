@@ -116,6 +116,24 @@ class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun rename(id: String, newTitle: String) {
+        viewModelScope.launch {
+            refreshCfg()
+            _busy.value = true
+            _error.value = null
+            try {
+                val updated = api.updateConversationTitle(id, newTitle)
+                _conversations.value = _conversations.value.map { if (it.id == id) updated else it }
+                    .sortedByDescending { it.updatedAt }
+            } catch (t: Throwable) {
+                Log.e("ConversationsHomeVM", "rename failed", t)
+                _error.value = t.message ?: "リネームに失敗しました"
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
     private suspend fun refreshCfg() {
         val cfg = settings.flow.first()
         currentUrl = cfg.url

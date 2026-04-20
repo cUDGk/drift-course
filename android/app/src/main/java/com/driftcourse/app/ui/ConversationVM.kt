@@ -41,6 +41,10 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    // ノート表示で「**<モデル名>**」ラベルを出すために character を引いておく。
+    private val _characterName = MutableStateFlow("")
+    val characterName: StateFlow<String> = _characterName.asStateFlow()
+
     private var convId: String? = null
     private var streamJob: Job? = null
 
@@ -60,8 +64,16 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
             refreshCfg()
             _error.value = null
             try {
-                _conversation.value = api.getConversation(id)
-                _messages.value = api.listMessages(id).map { UiMessage(it.role, it.content) }
+                val conv = api.getConversation(id)
+                _conversation.value = conv
+                _messages.value = api.listMessages(id).map { UiMessage(it.role, it.content, it.id) }
+                try {
+                    val c = api.getCharacter(conv.characterId)
+                    _characterName.value = c.name
+                } catch (t: Throwable) {
+                    // ノート表示のラベル用途のみ。失敗しても本機能は損なわない。
+                    Log.w("ConversationVM", "getCharacter failed (label only)", t)
+                }
             } catch (t: Throwable) {
                 Log.e("ConversationVM", "load failed", t)
                 _error.value = t.message ?: "読み込みに失敗しました"
@@ -91,6 +103,9 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
                         buf.append(delta)
                         updateLastAssistant(buf.toString())
                     }
+                    // ストリーム完了後、サーバが確定した ID を取りに行く。
+                    // 編集/分岐のために新メッセージに id を付けたい。
+                    refreshMessageIds(id)
                 } catch (t: Throwable) {
                     Log.e("ConversationVM", "stream failed", t)
                     _error.value = t.message ?: "ストリーミングに失敗しました"
@@ -105,6 +120,61 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
     fun cancel() {
         streamJob?.cancel()
         _streaming.value = false
+    }
+
+    fun editMessage(msgId: String, newText: String) {
+        val id = convId ?: return
+        viewModelScope.launch {
+            refreshCfg()
+            _error.value = null
+            try {
+                api.updateMessage(id, msgId, newText)
+                refreshMessageIds(id)
+            } catch (t: Throwable) {
+                Log.e("ConversationVM", "editMessage failed", t)
+                _error.value = t.message ?: "編集に失敗しました"
+            }
+        }
+    }
+
+    /**
+     * 指定 user メッセージ (msgId) の直前までを元会話から複製した新会話を作り、
+     * 新会話に対して [editedText] を送って応答をストリームさせる。
+     * 新会話 id は [onNavigate] へ渡し、画面遷移は UI 側に委ねる。
+     */
+    fun forkFrom(msgId: String, editedText: String, onNavigate: (String) -> Unit) {
+        val id = convId ?: return
+        val trimmed = editedText.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            refreshCfg()
+            if (currentToken.isBlank()) {
+                _error.value = "トークンが未設定です"
+                return@launch
+            }
+            try {
+                val newConv = api.forkConversation(id, msgId, inclusive = false)
+                // 先にナビゲート。新 VM 側で load → send を期待するのではなく、
+                // ここから明示的に最初のユーザ発言をストリームしに行く。
+                onNavigate(newConv.id)
+                // convId は画面が新 VM を作って load するので触らない。
+                // 以下の stream は「新会話宛」に直接叩く。ストリーム完了時点では
+                // UI の messages state は新会話側 VM が別途所有する。
+                sse.convMessage(newConv.id, PostMessage(content = trimmed)).collect { /* ignore deltas */ }
+            } catch (t: Throwable) {
+                Log.e("ConversationVM", "forkFrom failed", t)
+                _error.value = t.message ?: "分岐に失敗しました"
+            }
+        }
+    }
+
+    private suspend fun refreshMessageIds(id: String) {
+        try {
+            val fresh = api.listMessages(id)
+            _messages.value = fresh.map { UiMessage(it.role, it.content, it.id) }
+        } catch (t: Throwable) {
+            Log.w("ConversationVM", "refreshMessageIds failed", t)
+        }
     }
 
     private fun updateLastAssistant(content: String) {

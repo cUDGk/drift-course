@@ -44,7 +44,7 @@ import com.driftcourse.app.net.Conversation
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-private val STRUCTURED_KEYS = setOf("description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon")
+private val STRUCTURED_KEYS = setOf("gender", "user_address", "description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +71,8 @@ fun CharacterEditScreen(
 
     var name by remember { mutableStateOf(initialDraft?.name.orEmpty()) }
     var systemPrompt by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf(initialDraft?.gender.orEmpty()) }
+    var userAddress by remember { mutableStateOf(initialDraft?.user_address.orEmpty()) }
     var description by remember { mutableStateOf(initialDraft?.description.orEmpty()) }
     var personality by remember { mutableStateOf(initialDraft?.personality.orEmpty()) }
     var scenario by remember { mutableStateOf(initialDraft?.scenario.orEmpty()) }
@@ -94,6 +96,8 @@ fun CharacterEditScreen(
             name = c.name
             systemPrompt = c.systemPrompt
             originalCard = c.card
+            gender = readCardString(c.card, "gender")
+            userAddress = readCardString(c.card, "user_address")
             description = readCardString(c.card, "description")
             personality = readCardString(c.card, "personality")
             scenario = readCardString(c.card, "scenario")
@@ -189,6 +193,23 @@ fun CharacterEditScreen(
             )
 
             OutlinedTextField(
+                value = gender,
+                onValueChange = { gender = it },
+                label = { Text("性別") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            OutlinedTextField(
+                value = userAddress,
+                onValueChange = { userAddress = it },
+                label = { Text("ユーザの呼び方 (シチュエーション別に改行して列挙)") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 100.dp),
+            )
+
+            OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("人物説明") },
@@ -245,7 +266,7 @@ fun CharacterEditScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val card = mergeCard(originalCard, description, personality, scenario, firstMes, mesExample, memoryText, icon)
+                        val card = mergeCard(originalCard, gender, userAddress, description, personality, scenario, firstMes, mesExample, memoryText, icon)
                         if (characterId == null) {
                             vm.create(name.trim(), systemPrompt, card) { onBack() }
                         } else {
@@ -337,6 +358,8 @@ private fun ConversationRow(conv: Conversation, onClick: () -> Unit) {
 
 private fun mergeCard(
     original: JsonObject,
+    gender: String,
+    userAddress: String,
     description: String,
     personality: String,
     scenario: String,
@@ -349,6 +372,8 @@ private fun mergeCard(
     original.forEach { (k, v) ->
         if (k !in STRUCTURED_KEYS) merged[k] = v
     }
+    if (gender.isNotEmpty()) merged["gender"] = JsonPrimitive(gender)
+    if (userAddress.isNotEmpty()) merged["user_address"] = JsonPrimitive(userAddress)
     if (description.isNotEmpty()) merged["description"] = JsonPrimitive(description)
     if (personality.isNotEmpty()) merged["personality"] = JsonPrimitive(personality)
     if (scenario.isNotEmpty()) merged["scenario"] = JsonPrimitive(scenario)

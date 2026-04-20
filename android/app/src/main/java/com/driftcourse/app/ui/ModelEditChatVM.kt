@@ -183,6 +183,8 @@ class ModelEditChatVM(app: Application) : AndroidViewModel(app) {
         // 非空の項目だけ書き戻す。未知のカードキーは保持する。
         val merged = LinkedHashMap<String, kotlinx.serialization.json.JsonElement>()
         current.card.forEach { (k, v) -> merged[k] = v }
+        if (draft.gender.isNotBlank()) merged["gender"] = JsonPrimitive(draft.gender)
+        if (draft.user_address.isNotBlank()) merged["user_address"] = JsonPrimitive(draft.user_address)
         if (draft.description.isNotBlank()) merged["description"] = JsonPrimitive(draft.description)
         if (draft.personality.isNotBlank()) merged["personality"] = JsonPrimitive(draft.personality)
         if (draft.scenario.isNotBlank()) merged["scenario"] = JsonPrimitive(draft.scenario)
@@ -231,6 +233,8 @@ class ModelEditChatVM(app: Application) : AndroidViewModel(app) {
         val state = buildString {
             append("現在のモデル:\n")
             append("- name: ").append(c.name).append('\n')
+            append("- gender: ").append(readCard(c.card, "gender")).append('\n')
+            append("- user_address: ").append(readCard(c.card, "user_address")).append('\n')
             append("- description: ").append(readCard(c.card, "description")).append('\n')
             append("- personality: ").append(readCard(c.card, "personality")).append('\n')
             append("- scenario: ").append(readCard(c.card, "scenario")).append('\n')
@@ -259,12 +263,12 @@ class ModelEditChatVM(app: Application) : AndroidViewModel(app) {
         private const val FINALIZE_INSTRUCTION =
             "ここまでの内容を以下の JSON だけで返してください。前置き・説明・``` コードフェンス・" +
                 "『はい、わかりました』のような返事は一切禁止。キー: " +
-                "name / description / personality / scenario / first_mes / mes_example / memory。" +
+                "name / gender / user_address / description / personality / scenario / first_mes / mes_example / memory。" +
                 "変更する必要がない項目は空文字のままにして、変更したい項目だけ書き換えた値を入れてください。"
 
         private val SYSTEM_PROMPT = """
             あなたはキャラクター設計アシスタントです。既存モデルを対話で改良するのがゴール。
-            扱う要素: 名前・人物説明・性格・状況/舞台・初回挨拶・例会話・記憶。
+            扱う要素: 名前・性別・ユーザの呼び方・人物説明・性格・状況/舞台・初回挨拶・例会話・記憶。
 
             大前提:
             - 通常の対話では必ず自然な日本語の文で応答する。JSON・キー名の列挙・コードブロックは一切禁止。

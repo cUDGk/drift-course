@@ -100,6 +100,45 @@ class DriftApi(
         }
     }
 
+    suspend fun forkConversation(id: String, fromMessageId: String, inclusive: Boolean = false, title: String = ""): Conversation = withContext(Dispatchers.IO) {
+        val json = request(
+            "POST",
+            "/conversations/$id/fork",
+            driftJson.encodeToString(
+                ForkRequest.serializer(),
+                ForkRequest(fromMessageId = fromMessageId, inclusive = inclusive, title = title),
+            ),
+        )
+        driftJson.decodeFromString(Conversation.serializer(), json)
+    }
+
+    suspend fun updateConversationTitle(id: String, title: String): Conversation = withContext(Dispatchers.IO) {
+        val json = request(
+            "PATCH",
+            "/conversations/$id",
+            driftJson.encodeToString(ConversationPatch.serializer(), ConversationPatch(title)),
+        )
+        driftJson.decodeFromString(Conversation.serializer(), json)
+    }
+
+    suspend fun updateMessage(convId: String, mid: String, content: String): Message = withContext(Dispatchers.IO) {
+        val json = request(
+            "PATCH",
+            "/conversations/$convId/messages/$mid",
+            driftJson.encodeToString(MessagePatch.serializer(), MessagePatch(content)),
+        )
+        driftJson.decodeFromString(Message.serializer(), json)
+    }
+
+    suspend fun copyCharacter(id: String, name: String? = null): Character = withContext(Dispatchers.IO) {
+        val body = driftJson.encodeToString(
+            CharacterCopyRequest.serializer(),
+            CharacterCopyRequest(name),
+        )
+        val json = request("POST", "/characters/$id/copy", body)
+        driftJson.decodeFromString(Character.serializer(), json)
+    }
+
     private suspend fun request(method: String, path: String, jsonBody: String?, requireAuth: Boolean = true): String {
         val url = normalizeBaseUrl(baseUrlProvider()) + path
         val builder = Request.Builder().url(url)

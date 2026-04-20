@@ -119,6 +119,7 @@ fun DriftCourseApp() {
                 onOpenConversation = { nav.navigate(Routes.conversation(it)) },
                 onStartGhost = { nav.navigate(Routes.ghost(it)) },
                 onOpenManage = { nav.navigate(Routes.characterEdit(it)) },
+                onOpenEdit = { nav.navigate(Routes.characterEdit(it)) },
             )
         }
 
@@ -155,6 +156,7 @@ fun DriftCourseApp() {
                 conversationId = id,
                 onBack = { nav.popBackStack() },
                 onOpenMemory = { nav.navigate(Routes.memory(it)) },
+                onNavigateConversation = { nav.navigate(Routes.conversation(it)) },
             )
         }
 

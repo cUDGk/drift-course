@@ -174,6 +174,100 @@ class Database:
     def touch_conversation(self, convid: str) -> None:
         self.conn.execute("UPDATE conversations SET updated_at=? WHERE id=?", (_now(), convid))
 
+    def update_conversation_title(self, convid: str, title: str) -> dict[str, Any] | None:
+        cur = self.get_conversation(convid)
+        if cur is None:
+            return None
+        with self.tx() as c:
+            c.execute(
+                "UPDATE conversations SET title=?, updated_at=? WHERE id=?",
+                (title, _now(), convid),
+            )
+        return self.get_conversation(convid)
+
+    def copy_messages_range(
+        self,
+        src_convid: str,
+        dst_convid: str,
+        stop_message_id: str,
+        inclusive: bool,
+    ) -> int:
+        """src の messages を created_at 昇順で走査し、stop_message_id を発見したら
+        (inclusive=False なら直前まで, True ならその行まで) を dst にコピーする。
+        created_at は元の値を保ち、id は新規発行する。stop_message_id が見つからない
+        場合は -1 を返して呼び出し側で 404 を出す。"""
+        rows = self.conn.execute(
+            "SELECT id, role, content, created_at FROM messages "
+            "WHERE conversation_id=? ORDER BY created_at, id",
+            (src_convid,),
+        ).fetchall()
+        idx = -1
+        for i, r in enumerate(rows):
+            if r["id"] == stop_message_id:
+                idx = i
+                break
+        if idx < 0:
+            return -1
+        keep = rows[: idx + 1] if inclusive else rows[:idx]
+        count = 0
+        with self.tx() as c:
+            for r in keep:
+                c.execute(
+                    "INSERT INTO messages(id,conversation_id,role,content,created_at) VALUES(?,?,?,?,?)",
+                    (new_id(), dst_convid, r["role"], r["content"], r["created_at"]),
+                )
+                count += 1
+        return count
+
+    def fork_conversation(
+        self,
+        src_convid: str,
+        stop_message_id: str,
+        inclusive: bool,
+        title: str,
+    ) -> dict[str, Any] | None:
+        src = self.get_conversation(src_convid)
+        if src is None:
+            return None
+        # 事前に from_message_id の存在と保持範囲を確認。
+        rows = self.conn.execute(
+            "SELECT id FROM messages WHERE conversation_id=? ORDER BY created_at, id",
+            (src_convid,),
+        ).fetchall()
+        idx = -1
+        for i, r in enumerate(rows):
+            if r["id"] == stop_message_id:
+                idx = i
+                break
+        if idx < 0:
+            return None
+        new_conv = self.create_conversation(src["character_id"], title)
+        self.copy_messages_range(src_convid, new_conv["id"], stop_message_id, inclusive)
+        return self.get_conversation(new_conv["id"])
+
+    def copy_character(self, src_id: str, name: str | None = None) -> dict[str, Any] | None:
+        src = self.get_character(src_id)
+        if src is None:
+            return None
+        new_name = (name or "").strip()
+        if not new_name:
+            base = (src.get("name") or "").strip()
+            new_name = f"{base} (コピー)" if base else "(コピー)"
+        card = src.get("card") or {}
+        return self.create_character(new_name, src.get("system_prompt") or "", card)
+
+    def update_message_content(self, convid: str, mid: str, content: str) -> dict[str, Any] | None:
+        r = self.conn.execute(
+            "SELECT * FROM messages WHERE id=? AND conversation_id=?", (mid, convid)
+        ).fetchone()
+        if r is None:
+            return None
+        with self.tx() as c:
+            c.execute("UPDATE messages SET content=? WHERE id=?", (content, mid))
+            c.execute("UPDATE conversations SET updated_at=? WHERE id=?", (_now(), convid))
+        r2 = self.conn.execute("SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
+        return dict(r2) if r2 else None
+
     # --- messages ---
     def append_message(self, convid: str, role: str, content: str) -> dict[str, Any]:
         mid = new_id()

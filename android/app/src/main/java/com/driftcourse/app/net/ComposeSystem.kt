@@ -9,6 +9,8 @@ import kotlinx.serialization.json.jsonPrimitive
  * 対話永続化なしのゴーストモードなどで使う。メモリ 3 層はここには含めない。
  */
 private val CARD_LABELS: List<Pair<String, String>> = listOf(
+    "gender" to "性別",
+    "user_address" to "ユーザの呼び方",
     "description" to "人物",
     "personality" to "性格",
     "scenario" to "状況",

@@ -79,6 +79,24 @@ class ModelDetailVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun copy(onDone: (Character) -> Unit) {
+        val current = _character.value ?: return
+        viewModelScope.launch {
+            refreshCfg()
+            _busy.value = true
+            _error.value = null
+            try {
+                val copied = api.copyCharacter(current.id)
+                onDone(copied)
+            } catch (t: Throwable) {
+                Log.e("ModelDetailVM", "copy failed", t)
+                _error.value = t.message ?: "コピーに失敗しました"
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
     fun deleteConversation(convId: String) {
         viewModelScope.launch {
             refreshCfg()
