@@ -32,6 +32,15 @@ class DriftApi(
         driftJson.decodeFromString(ModelsResponse.serializer(), json)
     }
 
+    suspend fun loadModel(model: String, draft: String? = null): ModelLoadResponse = withContext(Dispatchers.IO) {
+        val body = driftJson.encodeToString(
+            LoadModelRequest.serializer(),
+            LoadModelRequest(model = model, draft = draft),
+        )
+        val json = request("POST", "/models/load", body)
+        driftJson.decodeFromString(ModelLoadResponse.serializer(), json)
+    }
+
     suspend fun listCharacters(): List<Character> = withContext(Dispatchers.IO) {
         val json = request("GET", "/characters", null)
         driftJson.decodeFromString(ListSerializer(Character.serializer()), json)

@@ -149,6 +149,10 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.size(4.dp))
+            SectionHeader("LLM モデル")
+            LlmModelSection(url = url, token = token)
+
+            Spacer(Modifier.size(4.dp))
             SectionHeader("テーマ")
 
             ThemeModeRow(
@@ -467,4 +471,118 @@ private fun CustomColorDialog(
             TextButton(onClick = onDismiss) { Text("キャンセル") }
         },
     )
+}
+
+@Composable
+private fun LlmModelSection(url: String, token: String) {
+    val scope = rememberCoroutineScope()
+    var listing by remember { mutableStateOf<com.driftcourse.app.net.ModelsResponse?>(null) }
+    var fetchError by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var switching by remember { mutableStateOf<String?>(null) }
+    var confirm by remember { mutableStateOf<String?>(null) }
+
+    val api = remember(url, token) {
+        DriftApi(baseUrlProvider = { url }, tokenProvider = { token })
+    }
+
+    suspend fun refresh() {
+        loading = true
+        fetchError = null
+        runCatching { api.listModels() }
+            .onSuccess { listing = it }
+            .onFailure { fetchError = it.message ?: it::class.java.simpleName }
+        loading = false
+    }
+
+    LaunchedEffect(url, token) { if (token.isNotBlank()) refresh() }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val current = listing?.current.orEmpty()
+        Text(
+            text = "現在: ${if (current.isEmpty()) "(未取得)" else current}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (fetchError != null) {
+            Text(
+                text = "読み込み失敗: $fetchError",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        listing?.available?.forEach { m ->
+            val isCurrent = m.isCurrent
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !isCurrent && switching == null) { confirm = m.name }
+                    .padding(vertical = 8.dp),
+            ) {
+                RadioButton(selected = isCurrent, onClick = null)
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        m.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    Text(
+                        "${"%.1f".format(m.sizeBytes / (1024.0 * 1024.0 * 1024.0))} GB",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        OutlinedButton(
+            onClick = { scope.launch { refresh() } },
+            enabled = !loading && switching == null,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (loading) "取得中…" else "モデル一覧を再取得")
+        }
+    }
+
+    switching?.let { name ->
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("モデル切替中…") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("$name を読み込み中。30B は 30〜60 秒かかることがあります。")
+                    androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {},
+        )
+    }
+
+    confirm?.let { name ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text("モデルを切替") },
+            text = { Text("$name に切り替えます。llama-server が再起動するため応答まで数十秒かかります。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = null
+                    scope.launch {
+                        switching = name
+                        runCatching { api.loadModel(name) }
+                            .onSuccess {
+                                listing = listing?.copy(current = it.current, draft = it.draft, available = listing?.available?.map { mi ->
+                                    mi.copy(isCurrent = mi.name == it.current, isDraft = mi.name == it.draft)
+                                }.orEmpty())
+                            }
+                            .onFailure { fetchError = it.message ?: it::class.java.simpleName }
+                        switching = null
+                    }
+                }) { Text("切替") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = null }) { Text("キャンセル") }
+            },
+        )
+    }
 }

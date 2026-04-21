@@ -60,6 +60,18 @@ data class ModelsResponse(
 )
 
 @Serializable
+data class LoadModelRequest(
+    val model: String,
+    val draft: String? = null,
+)
+
+@Serializable
+data class ModelLoadResponse(
+    val current: String,
+    val draft: String,
+)
+
+@Serializable
 data class Character(
     val id: String,
     val name: String,
