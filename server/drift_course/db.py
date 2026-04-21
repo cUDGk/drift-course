@@ -150,15 +150,23 @@ class Database:
             )
         return self.get_conversation(convid)  # type: ignore[return-value]
 
-    def list_conversations(self, character_id: str | None) -> list[dict[str, Any]]:
+    def list_conversations(
+        self, character_id: str | None, include_empty: bool = False
+    ) -> list[dict[str, Any]]:
+        # メッセージを持たない会話 (+ 押しただけで放置された残骸) は既定で除外する。
+        empty_filter = "" if include_empty else (
+            " AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id=c.id)"
+        )
         if character_id:
             rows = self.conn.execute(
-                "SELECT * FROM conversations WHERE character_id=? ORDER BY updated_at DESC",
+                f"SELECT c.* FROM conversations c "
+                f"WHERE c.character_id=? {empty_filter} ORDER BY c.updated_at DESC",
                 (character_id,),
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT * FROM conversations ORDER BY updated_at DESC"
+                f"SELECT c.* FROM conversations c "
+                f"WHERE 1=1 {empty_filter} ORDER BY c.updated_at DESC"
             ).fetchall()
         return [dict(r) for r in rows]
 

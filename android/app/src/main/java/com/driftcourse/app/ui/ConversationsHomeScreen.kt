@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -60,6 +62,7 @@ fun ConversationsHomeScreen(
     val loading by vm.loading.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    var showPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { vm.reload() }
 
@@ -79,9 +82,7 @@ fun ConversationsHomeScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = {
-                    if (!busy) vm.createNew { onOpenConversation(it.id) }
-                },
+                onClick = { if (!busy) showPicker = true },
             ) {
                 Icon(Icons.Default.Add, contentDescription = "新しい対話")
             }
@@ -125,6 +126,82 @@ fun ConversationsHomeScreen(
             }
         }
     }
+    }
+
+    if (showPicker) {
+        NewConversationPicker(
+            characters = charactersById.values.filterNot { it.isBare() }.sortedByDescending { it.updatedAt },
+            onDismiss = { showPicker = false },
+            onPickBare = {
+                showPicker = false
+                if (!busy) vm.createNew { onOpenConversation(it.id) }
+            },
+            onPickCharacter = { character ->
+                showPicker = false
+                if (!busy) vm.createWithCharacter(character.id) { onOpenConversation(it.id) }
+            },
+        )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun NewConversationPicker(
+    characters: List<com.driftcourse.app.net.Character>,
+    onDismiss: () -> Unit,
+    onPickBare: () -> Unit,
+    onPickCharacter: (com.driftcourse.app.net.Character) -> Unit,
+) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .heightIn(max = 480.dp),
+        ) {
+            Text(
+                "相手を選ぶ",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
+            androidx.compose.material3.ListItem(
+                headlineContent = { Text("素のモデル") },
+                supportingContent = { Text("ペルソナなしで直接 LLM と話す") },
+                leadingContent = {
+                    ModelAvatar(iconDataUrl = null, fallbackName = "素", size = 40.dp)
+                },
+                modifier = Modifier.clickable { onPickBare() },
+            )
+            if (characters.isEmpty()) {
+                Text(
+                    "作成済みのモデルはまだありません",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            } else {
+                androidx.compose.foundation.lazy.LazyColumn {
+                    items(characters, key = { it.id }) { c ->
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(c.name.ifBlank { "(名前なし)" }) },
+                            leadingContent = {
+                                ModelAvatar(
+                                    iconDataUrl = readCardString(c.card, "icon").ifBlank { null },
+                                    fallbackName = c.name,
+                                    size = 40.dp,
+                                )
+                            },
+                            modifier = Modifier.clickable { onPickCharacter(c) },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -109,6 +109,28 @@ class ConversationsHomeVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun createWithCharacter(characterId: String, onDone: (Conversation) -> Unit) {
+        viewModelScope.launch {
+            refreshCfg()
+            if (currentToken.isBlank()) {
+                _error.value = "トークンが未設定です"
+                return@launch
+            }
+            _busy.value = true
+            _error.value = null
+            try {
+                val conv = api.createConversation(characterId)
+                _conversations.value = listOf(conv) + _conversations.value
+                onDone(conv)
+            } catch (t: Throwable) {
+                Log.e("ConversationsHomeVM", "createWithCharacter failed", t)
+                _error.value = t.message ?: "作成に失敗しました"
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
     fun delete(id: String) {
         viewModelScope.launch {
             refreshCfg()

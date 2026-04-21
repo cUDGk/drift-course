@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -125,6 +126,7 @@ fun ConversationScreen(
     var selStart by remember { mutableStateOf<Int?>(null) }
     var selEnd by remember { mutableStateOf<Int?>(null) }
     var exporting by remember { mutableStateOf(false) }
+    var showLlmSwitcher by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -258,6 +260,9 @@ fun ConversationScreen(
                     IconButton(onClick = { onOpenMemory(conversationId) }) {
                         Icon(Icons.Default.Memory, contentDescription = "記憶")
                     }
+                    IconButton(onClick = { showLlmSwitcher = true }) {
+                        Icon(Icons.Default.Tune, contentDescription = "LLM 切替")
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -386,6 +391,10 @@ fun ConversationScreen(
                 editFor = null
             },
         )
+    }
+
+    if (showLlmSwitcher) {
+        LlmSwitcherSheet(onDismiss = { showLlmSwitcher = false })
     }
 }
 
@@ -877,4 +886,100 @@ private fun NoteSidedListLocal(
 private fun Color.luminance(): Float {
     // 近似。厳密な sRGB 線形化は不要 (薄暗いか明るいかの 2 分類で使うだけ)。
     return (red * 0.2126f + green * 0.7152f + blue * 0.0722f)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LlmSwitcherSheet(onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val store = remember { com.driftcourse.app.settings.SettingsStore(ctx.applicationContext) }
+    val cfg by store.flow.collectAsStateWithLifecycle(
+        initialValue = com.driftcourse.app.settings.ServerSettings("", "")
+    )
+    val api = remember(cfg.url, cfg.token) {
+        com.driftcourse.app.net.DriftApi(
+            baseUrlProvider = { cfg.url },
+            tokenProvider = { cfg.token },
+        )
+    }
+    var listing by remember { mutableStateOf<com.driftcourse.app.net.ModelsResponse?>(null) }
+    var err by remember { mutableStateOf<String?>(null) }
+    var switching by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState()
+
+    LaunchedEffect(cfg.url, cfg.token) {
+        if (cfg.token.isNotBlank()) {
+            runCatching { api.listModels() }
+                .onSuccess { listing = it; err = null }
+                .onFailure { err = it.message ?: it::class.java.simpleName }
+        }
+    }
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = { if (switching == null) onDismiss() },
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .heightIn(max = 480.dp),
+        ) {
+            Text(
+                "LLM モデルを切替",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "現在: ${listing?.current.orEmpty().ifEmpty { "(未取得)" }}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            err?.let {
+                Text("読み込み失敗: $it", color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            if (switching != null) {
+                androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    "$switching に切替中… 30B は 30〜60 秒かかります",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                )
+            }
+            androidx.compose.foundation.lazy.LazyColumn {
+                items(listing?.available.orEmpty(), key = { it.name }) { m ->
+                    val isCurrent = m.isCurrent
+                    androidx.compose.material3.ListItem(
+                        headlineContent = { Text(m.name) },
+                        supportingContent = {
+                            Text("${"%.1f".format(m.sizeBytes / (1024.0 * 1024.0 * 1024.0))} GB")
+                        },
+                        leadingContent = {
+                            androidx.compose.material3.RadioButton(selected = isCurrent, onClick = null)
+                        },
+                        modifier = Modifier.clickable(enabled = !isCurrent && switching == null) {
+                            scope.launch {
+                                switching = m.name
+                                runCatching { api.loadModel(m.name) }
+                                    .onSuccess {
+                                        listing = listing?.copy(
+                                            current = it.current,
+                                            draft = it.draft,
+                                            available = listing?.available?.map { mi ->
+                                                mi.copy(isCurrent = mi.name == it.current, isDraft = mi.name == it.draft)
+                                            }.orEmpty(),
+                                        )
+                                    }
+                                    .onFailure { err = it.message ?: it::class.java.simpleName }
+                                switching = null
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
 }
