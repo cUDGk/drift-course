@@ -102,6 +102,7 @@ async def patch_memory(convid: str, layer: str, body: MemoryPatch, request: Requ
 
 CARD_LABELS = [
     ("gender", "性別"),
+    ("first_person", "一人称"),
     ("user_address", "ユーザの呼び方"),
     ("description", "人物"),
     ("personality", "性格"),

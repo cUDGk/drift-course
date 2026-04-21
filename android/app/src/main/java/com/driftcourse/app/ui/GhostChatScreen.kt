@@ -141,11 +141,6 @@ fun GhostChatScreen(
                 GhostMessageList(messages = messages, streaming = streaming)
             }
 
-            GhostLoadingAvatarOverlay(
-                visible = showLoadingAvatar,
-                iconDataUrl = iconDataUrl,
-                fallbackName = character?.name.orEmpty(),
-            )
         }
 
         GhostComposer(

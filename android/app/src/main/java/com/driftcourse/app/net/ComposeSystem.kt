@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 private val CARD_LABELS: List<Pair<String, String>> = listOf(
     "gender" to "性別",
+    "first_person" to "一人称",
     "user_address" to "ユーザの呼び方",
     "description" to "人物",
     "personality" to "性格",

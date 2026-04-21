@@ -45,7 +45,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 
-private val STRUCTURED_KEYS = setOf("gender", "user_address", "description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon", "max_tokens", "response_style", "no_narration")
+private val STRUCTURED_KEYS = setOf("gender", "first_person", "user_address", "description", "personality", "scenario", "first_mes", "mes_example", "memory", "icon", "max_tokens", "response_style", "no_narration")
 
 private val RESPONSE_STYLE_PRESETS = listOf(
     "1行だけ" to "基本的に1行 (1〜2文) で返答する。情景描写や補足は書かない。",
@@ -81,6 +81,7 @@ fun CharacterEditScreen(
     var name by remember { mutableStateOf(initialDraft?.name.orEmpty()) }
     var systemPrompt by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf(initialDraft?.gender.orEmpty()) }
+    var firstPerson by remember { mutableStateOf("") }
     var userAddress by remember { mutableStateOf(initialDraft?.user_address.orEmpty()) }
     var description by remember { mutableStateOf(initialDraft?.description.orEmpty()) }
     var personality by remember { mutableStateOf(initialDraft?.personality.orEmpty()) }
@@ -108,6 +109,7 @@ fun CharacterEditScreen(
             systemPrompt = c.systemPrompt
             originalCard = c.card
             gender = readCardString(c.card, "gender")
+            firstPerson = readCardString(c.card, "first_person")
             userAddress = readCardString(c.card, "user_address")
             description = readCardString(c.card, "description")
             personality = readCardString(c.card, "personality")
@@ -209,6 +211,14 @@ fun CharacterEditScreen(
                 value = gender,
                 onValueChange = { gender = it },
                 label = { Text("性別") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            OutlinedTextField(
+                value = firstPerson,
+                onValueChange = { firstPerson = it },
+                label = { Text("一人称 (例: 僕 / 私 / 俺 / ワシ)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -327,7 +337,7 @@ fun CharacterEditScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val card = mergeCard(originalCard, gender, userAddress, description, personality, scenario, firstMes, mesExample, memoryText, icon, responseStyle, noNarration)
+                        val card = mergeCard(originalCard, gender, firstPerson, userAddress, description, personality, scenario, firstMes, mesExample, memoryText, icon, responseStyle, noNarration)
                         if (characterId == null) {
                             vm.create(name.trim(), systemPrompt, card) { onBack() }
                         } else {
@@ -420,6 +430,7 @@ private fun ConversationRow(conv: Conversation, onClick: () -> Unit) {
 private fun mergeCard(
     original: JsonObject,
     gender: String,
+    firstPerson: String,
     userAddress: String,
     description: String,
     personality: String,
@@ -436,6 +447,7 @@ private fun mergeCard(
         if (k !in STRUCTURED_KEYS) merged[k] = v
     }
     if (gender.isNotEmpty()) merged["gender"] = JsonPrimitive(gender)
+    if (firstPerson.isNotEmpty()) merged["first_person"] = JsonPrimitive(firstPerson)
     if (userAddress.isNotEmpty()) merged["user_address"] = JsonPrimitive(userAddress)
     if (description.isNotEmpty()) merged["description"] = JsonPrimitive(description)
     if (personality.isNotEmpty()) merged["personality"] = JsonPrimitive(personality)

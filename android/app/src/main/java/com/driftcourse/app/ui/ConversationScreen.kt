@@ -313,12 +313,6 @@ fun ConversationScreen(
                 )
             }
 
-            LoadingAvatarOverlay(
-                visible = showLoadingAvatar,
-                iconDataUrl = iconDataUrl,
-                fallbackName = characterName,
-            )
-
             if (exporting) {
                 Box(
                     modifier = Modifier
