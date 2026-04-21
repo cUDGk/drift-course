@@ -102,6 +102,8 @@ data class Conversation(
     val title: String,
     @SerialName("created_at") val createdAt: Long,
     @SerialName("updated_at") val updatedAt: Long,
+    // primary character 以外の追加参加者。空なら従来どおり 1 対 1 のソロ会話。
+    val members: List<String> = emptyList(),
 )
 
 @Serializable
@@ -150,6 +152,11 @@ data class ForkRequest(
 @Serializable
 data class ConversationPatch(
     val title: String,
+)
+
+@Serializable
+data class MembersPatch(
+    val members: List<String>,
 )
 
 @Serializable

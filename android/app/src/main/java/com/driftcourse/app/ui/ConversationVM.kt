@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.driftcourse.app.cache.LocalCache
+import com.driftcourse.app.net.Character
 import com.driftcourse.app.net.Conversation
 import com.driftcourse.app.net.DriftApi
 import com.driftcourse.app.net.Message
@@ -52,6 +53,14 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
     private val _iconDataUrl = MutableStateFlow<String?>(null)
     val iconDataUrl: StateFlow<String?> = _iconDataUrl.asStateFlow()
 
+    // グループチャット用。`【名前】` 話者検出 → アバター引き当てと、
+    // メンバー管理シートの表示ソースとして使う。
+    private val _characters = MutableStateFlow<Map<String, Character>>(emptyMap())
+    val characters: StateFlow<Map<String, Character>> = _characters.asStateFlow()
+
+    private val _allCharacters = MutableStateFlow<List<Character>>(emptyList())
+    val allCharacters: StateFlow<List<Character>> = _allCharacters.asStateFlow()
+
     private var convId: String? = null
     private var streamJob: Job? = null
 
@@ -73,7 +82,10 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
             if (cached.isNotEmpty()) {
                 _messages.value = cached.map { UiMessage(it.role, it.content, it.id) }
             }
-            val cachedChar = cache.readCharacters().firstOrNull { c ->
+            val cachedCharacters = cache.readCharacters()
+            _allCharacters.value = cachedCharacters
+            _characters.value = cachedCharacters.associateBy { it.id }
+            val cachedChar = cachedCharacters.firstOrNull { c ->
                 cache.readConversations().firstOrNull { it.id == id }?.characterId == c.id
             }
             if (cachedChar != null) {
@@ -96,12 +108,35 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
                 } catch (t: Throwable) {
                     Log.w("ConversationVM", "getCharacter failed (label/avatar only)", t)
                 }
+                try {
+                    val all = api.listCharacters()
+                    _allCharacters.value = all
+                    _characters.value = all.associateBy { it.id }
+                    cache.writeCharacters(all)
+                } catch (t: Throwable) {
+                    Log.w("ConversationVM", "listCharacters failed (group avatars only)", t)
+                }
             } catch (t: Throwable) {
                 Log.e("ConversationVM", "load failed", t)
                 // キャッシュ表示済みならエラーを出さない。ゼロからなら出す。
                 if (_messages.value.isEmpty()) {
                     _error.value = t.message ?: "読み込みに失敗しました"
                 }
+            }
+        }
+    }
+
+    fun updateMembers(members: List<String>) {
+        val id = convId ?: return
+        viewModelScope.launch {
+            refreshCfg()
+            _error.value = null
+            try {
+                val updated = api.updateMembers(id, members)
+                _conversation.value = updated
+            } catch (t: Throwable) {
+                Log.e("ConversationVM", "updateMembers failed", t)
+                _error.value = t.message ?: "メンバー更新に失敗しました"
             }
         }
     }

@@ -130,6 +130,15 @@ class DriftApi(
         driftJson.decodeFromString(Conversation.serializer(), json)
     }
 
+    suspend fun updateMembers(convId: String, members: List<String>): Conversation = withContext(Dispatchers.IO) {
+        val json = request(
+            "PATCH",
+            "/conversations/$convId/members",
+            driftJson.encodeToString(MembersPatch.serializer(), MembersPatch(members)),
+        )
+        driftJson.decodeFromString(Conversation.serializer(), json)
+    }
+
     suspend fun updateMessage(convId: String, mid: String, content: String): Message = withContext(Dispatchers.IO) {
         val json = request(
             "PATCH",

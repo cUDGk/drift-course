@@ -257,6 +257,22 @@ private fun ConversationHomeRow(
                 fallbackName = if (character?.isBare() == true) "素" else character?.name.orEmpty(),
                 size = 32.dp,
             )
+            // グループチャット (追加メンバー有り) は +N のバッジを右隣に重ねて出す。
+            if (conv.members.isNotEmpty()) {
+                Spacer(Modifier.width(6.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                ) {
+                    Text(
+                        text = "+${conv.members.size}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

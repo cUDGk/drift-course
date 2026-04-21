@@ -42,6 +42,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Tune
@@ -85,6 +86,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.driftcourse.app.net.Character
+import com.driftcourse.app.net.isBare
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -104,6 +107,8 @@ fun ConversationScreen(
     val error by vm.error.collectAsStateWithLifecycle()
     val characterName by vm.characterName.collectAsStateWithLifecycle()
     val iconDataUrl by vm.iconDataUrl.collectAsStateWithLifecycle()
+    val charactersById by vm.characters.collectAsStateWithLifecycle()
+    val allCharacters by vm.allCharacters.collectAsStateWithLifecycle()
 
     LaunchedEffect(conversationId) { vm.load(conversationId) }
 
@@ -127,6 +132,8 @@ fun ConversationScreen(
     var selEnd by remember { mutableStateOf<Int?>(null) }
     var exporting by remember { mutableStateOf(false) }
     var showLlmSwitcher by remember { mutableStateOf(false) }
+    var showMembersSheet by remember { mutableStateOf(false) }
+    var showAddMemberSheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -257,6 +264,9 @@ fun ConversationScreen(
                     }) {
                         Icon(Icons.Default.PhotoCamera, contentDescription = "範囲を画像で保存")
                     }
+                    IconButton(onClick = { showMembersSheet = true }) {
+                        Icon(Icons.Default.Group, contentDescription = "メンバー管理")
+                    }
                     IconButton(onClick = { onOpenMemory(conversationId) }) {
                         Icon(Icons.Default.Memory, contentDescription = "記憶")
                     }
@@ -292,6 +302,7 @@ fun ConversationScreen(
                 DisplayMode.NOTE_FLAT -> NoteListLocal(
                     messages = messages,
                     modelName = characterName,
+                    charactersById = charactersById,
                     onLongPress = { msg -> if (!selectionMode) menuFor = msg },
                     selectionMode = selectionMode,
                     selStart = selStart,
@@ -301,6 +312,7 @@ fun ConversationScreen(
                 DisplayMode.NOTE_SIDED -> NoteSidedListLocal(
                     messages = messages,
                     modelName = characterName,
+                    charactersById = charactersById,
                     onLongPress = { msg -> if (!selectionMode) menuFor = msg },
                     selectionMode = selectionMode,
                     selStart = selStart,
@@ -310,6 +322,7 @@ fun ConversationScreen(
                 DisplayMode.CHAT -> MessageListLocal(
                     messages = messages,
                     streaming = streaming,
+                    charactersById = charactersById,
                     onLongPress = { msg -> if (!selectionMode) menuFor = msg },
                     selectionMode = selectionMode,
                     selStart = selStart,
@@ -395,6 +408,45 @@ fun ConversationScreen(
 
     if (showLlmSwitcher) {
         LlmSwitcherSheet(onDismiss = { showLlmSwitcher = false })
+    }
+
+    if (showMembersSheet) {
+        val conv = conversation
+        val primary = conv?.characterId?.let { charactersById[it] }
+        val memberChars = (conv?.members ?: emptyList()).mapNotNull { charactersById[it] }
+        MembersManageSheet(
+            primary = primary,
+            primaryFallbackName = characterName,
+            members = memberChars,
+            onDismiss = { showMembersSheet = false },
+            onAddClick = { showAddMemberSheet = true },
+            onRemove = { memberId ->
+                val current = conv?.members.orEmpty()
+                vm.updateMembers(current.filterNot { it == memberId })
+            },
+        )
+    }
+
+    if (showAddMemberSheet) {
+        val conv = conversation
+        val excluded = buildSet {
+            conv?.characterId?.let { add(it) }
+            addAll(conv?.members.orEmpty())
+        }
+        val candidates = allCharacters
+            .filterNot { it.isBare() || it.id in excluded }
+            .sortedByDescending { it.updatedAt }
+        AddMemberSheet(
+            candidates = candidates,
+            onDismiss = { showAddMemberSheet = false },
+            onPick = { c ->
+                val current = conv?.members.orEmpty()
+                if (c.id !in current && c.id != conv?.characterId) {
+                    vm.updateMembers(current + c.id)
+                }
+                showAddMemberSheet = false
+            },
+        )
     }
 }
 
@@ -530,6 +582,7 @@ private fun EmptyConv() {
 private fun MessageListLocal(
     messages: List<UiMessage>,
     streaming: Boolean,
+    charactersById: Map<String, Character>,
     onLongPress: (UiMessage) -> Unit,
     selectionMode: Boolean,
     selStart: Int?,
@@ -559,6 +612,7 @@ private fun MessageListLocal(
             MessageBubbleLocal(
                 msg = msg,
                 streaming = streaming,
+                charactersById = charactersById,
                 onLongPress = onLongPress,
                 selectionMode = selectionMode,
                 selected = isIndexSelected(idx, selStart, selEnd),
@@ -573,17 +627,13 @@ private fun MessageListLocal(
 private fun MessageBubbleLocal(
     msg: UiMessage,
     streaming: Boolean,
+    charactersById: Map<String, Character>,
     onLongPress: (UiMessage) -> Unit,
     selectionMode: Boolean,
     selected: Boolean,
     onSelectTap: () -> Unit,
 ) {
     val isUser = msg.role == "user"
-    val shape = if (isUser) {
-        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
-    } else {
-        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
-    }
     val bg = if (isUser) MaterialTheme.colorScheme.primary
              else MaterialTheme.colorScheme.surfaceContainerHigh
     val fg = if (isUser) MaterialTheme.colorScheme.onPrimary
@@ -593,7 +643,7 @@ private fun MessageBubbleLocal(
     // 選択モード中は長押しを殺し、タップで選択を切替える。
     val longPressEnabled = msg.id != null && !selectionMode
 
-    val interaction = if (selectionMode) {
+    val interaction: Modifier = if (selectionMode) {
         Modifier.clickable(onClick = onSelectTap)
     } else {
         Modifier.combinedClickable(
@@ -602,36 +652,125 @@ private fun MessageBubbleLocal(
             onLongClick = { onLongPress(msg) },
         )
     }
-    val borderMod = if (selected) {
-        Modifier.border(
-            width = 2.dp,
-            color = MaterialTheme.colorScheme.tertiary,
-            shape = shape,
-        )
-    } else Modifier
+
+    // ストリーム中で、まだ delta が来ていない assistant の空枠は単独で "…" を出す。
+    if (msg.content.isEmpty() && !isUser && streaming) {
+        val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
+        val borderMod = if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary, shape) else Modifier
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            Surface(
+                shape = shape,
+                color = bg,
+                contentColor = fg,
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .then(borderMod)
+                    .then(interaction),
+            ) {
+                Text(
+                    text = "…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
+        }
+        return
+    }
+
+    // assistant メッセージのみ `【名前】` 分割を試みる。user 発言はそのまま。
+    val parts = remember(msg.content, isUser) {
+        if (isUser) listOf<Pair<String?, String>>(null to msg.content)
+        else parseMultiSpeaker(msg.content)
+    }
+
+    val borderShape = if (isUser) {
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
+    } else {
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
+    }
+    val borderMod = if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary, borderShape) else Modifier
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().then(borderMod),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        for ((speaker, body) in parts) {
+            SpeakerBubble(
+                speaker = speaker,
+                body = body,
+                isUser = isUser,
+                bg = bg,
+                fg = fg,
+                charactersById = charactersById,
+                interaction = interaction,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpeakerBubble(
+    speaker: String?,
+    body: String,
+    isUser: Boolean,
+    bg: androidx.compose.ui.graphics.Color,
+    fg: androidx.compose.ui.graphics.Color,
+    charactersById: Map<String, Character>,
+    interaction: Modifier,
+) {
+    val shape = if (isUser) {
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
+    } else {
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
+    }
+    val displayBody = if (body.isBlank()) "…" else body
+    if (speaker == null) {
         Surface(
             shape = shape,
             color = bg,
             contentColor = fg,
             modifier = Modifier
                 .widthIn(max = 300.dp)
-                .then(borderMod)
                 .then(interaction),
         ) {
-            if (msg.content.isEmpty() && !isUser && streaming) {
-                Text(
-                    text = "…",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                )
-            } else {
+            MarkdownText(
+                text = displayBody,
+                color = fg,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            )
+        }
+        return
+    }
+
+    // 話者名からアバターを引き当てる。未知の名前は `?` フォールバック。
+    val matched = charactersById.values.firstOrNull { it.name.trim() == speaker }
+    val icon = matched?.let { readCardString(it.card, "icon").ifBlank { null } }
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ModelAvatar(iconDataUrl = icon, fallbackName = speaker, size = 28.dp)
+        Column(horizontalAlignment = Alignment.Start) {
+            Text(
+                text = speaker,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 6.dp, bottom = 2.dp),
+            )
+            Surface(
+                shape = shape,
+                color = bg,
+                contentColor = fg,
+                modifier = Modifier
+                    .widthIn(max = 280.dp)
+                    .then(interaction),
+            ) {
                 MarkdownText(
-                    text = msg.content,
+                    text = displayBody,
                     color = fg,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 )
@@ -645,6 +784,7 @@ private fun MessageBubbleLocal(
 private fun NoteListLocal(
     messages: List<UiMessage>,
     modelName: String,
+    charactersById: Map<String, Character>,
     onLongPress: (UiMessage) -> Unit,
     selectionMode: Boolean,
     selStart: Int?,
@@ -671,11 +811,7 @@ private fun NoteListLocal(
     ) {
         items(messages.size) { idx ->
             val msg = messages[idx]
-            val label = if (msg.role == "user") "あなた" else (modelName.ifBlank { "モデル" })
-            val body = buildString {
-                append("**").append(label).append("**\n\n")
-                append(msg.content)
-            }
+            val body = buildNoteBody(msg = msg, modelName = modelName)
             val selected = isIndexSelected(idx, selStart, selEnd)
             val shape = RoundedCornerShape(8.dp)
             val interaction = if (selectionMode) {
@@ -703,6 +839,25 @@ private fun NoteListLocal(
                 )
             }
         }
+    }
+}
+
+/**
+ * ノート表示向けに `**名前**\n\n本文` を組み立てる。assistant メッセージ内に
+ * `【名前】` 話者マーカーがあれば複数話者に展開し、段落間を空行で区切る。
+ */
+private fun buildNoteBody(msg: UiMessage, modelName: String): String {
+    if (msg.role == "user") {
+        return "**あなた**\n\n${msg.content}"
+    }
+    val parts = parseMultiSpeaker(msg.content)
+    if (parts.size == 1 && parts[0].first == null) {
+        val label = modelName.ifBlank { "モデル" }
+        return "**$label**\n\n${msg.content}"
+    }
+    return parts.joinToString("\n\n") { (speaker, body) ->
+        val label = speaker ?: modelName.ifBlank { "モデル" }
+        "**$label**\n\n$body"
     }
 }
 
@@ -835,6 +990,7 @@ enum class DisplayMode { CHAT, NOTE_SIDED, NOTE_FLAT }
 private fun NoteSidedListLocal(
     messages: List<UiMessage>,
     modelName: String,
+    charactersById: Map<String, Character>,
     onLongPress: (UiMessage) -> Unit,
     selectionMode: Boolean,
     selStart: Int?,
@@ -858,10 +1014,7 @@ private fun NoteSidedListLocal(
         items(messages.size) { idx ->
             val msg = messages[idx]
             val isUser = msg.role == "user"
-            val label = if (isUser) "あなた" else (modelName.ifBlank { "モデル" })
-            val body = buildString {
-                append("**").append(label).append("**\n\n").append(msg.content)
-            }
+            val body = buildNoteBody(msg = msg, modelName = modelName)
             val selected = isIndexSelected(idx, selStart, selEnd)
             val shape = RoundedCornerShape(8.dp)
             val interaction = if (selectionMode) {
@@ -988,6 +1141,139 @@ private fun LlmSwitcherSheet(onDismiss: () -> Unit) {
                             }
                         },
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * グループチャットのメンバー管理シート。
+ * 主役キャラは削除不可 (タグで明示) 、追加メンバーはタップで即削除。
+ * 「+ メンバーを追加」は別シートを開く側に委譲する。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MembersManageSheet(
+    primary: Character?,
+    primaryFallbackName: String,
+    members: List<Character>,
+    onDismiss: () -> Unit,
+    onAddClick: () -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .heightIn(max = 520.dp),
+        ) {
+            Text(
+                "メンバー",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
+            // 主役キャラ。未取得時は会話名を出しておく。
+            androidx.compose.material3.ListItem(
+                headlineContent = {
+                    Text(primary?.name?.ifBlank { primaryFallbackName } ?: primaryFallbackName.ifBlank { "(主役)" })
+                },
+                supportingContent = { Text("主役 (固定)") },
+                leadingContent = {
+                    ModelAvatar(
+                        iconDataUrl = primary?.card?.let { readCardString(it, "icon").ifBlank { null } },
+                        fallbackName = primary?.name.orEmpty().ifBlank { primaryFallbackName },
+                        size = 40.dp,
+                    )
+                },
+                trailingContent = { Text("👑", style = MaterialTheme.typography.titleMedium) },
+            )
+            if (members.isEmpty()) {
+                Text(
+                    "追加メンバーはいません",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp),
+                )
+            } else {
+                androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                    items(members, key = { it.id }) { c ->
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(c.name.ifBlank { "(名前なし)" }) },
+                            supportingContent = { Text("タップで外す") },
+                            leadingContent = {
+                                ModelAvatar(
+                                    iconDataUrl = readCardString(c.card, "icon").ifBlank { null },
+                                    fallbackName = c.name,
+                                    size = 40.dp,
+                                )
+                            },
+                            modifier = Modifier.clickable { onRemove(c.id) },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.size(8.dp))
+            TextButton(
+                onClick = onAddClick,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("+ メンバーを追加") }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddMemberSheet(
+    candidates: List<Character>,
+    onDismiss: () -> Unit,
+    onPick: (Character) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .heightIn(max = 520.dp),
+        ) {
+            Text(
+                "追加するメンバーを選ぶ",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
+            if (candidates.isEmpty()) {
+                Text(
+                    "追加できるキャラクターがありません",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            } else {
+                androidx.compose.foundation.lazy.LazyColumn {
+                    items(candidates, key = { it.id }) { c ->
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(c.name.ifBlank { "(名前なし)" }) },
+                            leadingContent = {
+                                ModelAvatar(
+                                    iconDataUrl = readCardString(c.card, "icon").ifBlank { null },
+                                    fallbackName = c.name,
+                                    size = 40.dp,
+                                )
+                            },
+                            modifier = Modifier.clickable { onPick(c) },
+                        )
+                    }
                 }
             }
         }

@@ -37,7 +37,12 @@ class ForkRequest(BaseModel):
 
 
 class ConversationPatch(BaseModel):
-    title: str
+    title: str | None = None
+    members: list[str] | None = None
+
+
+class MembersPatch(BaseModel):
+    members: list[str]
 
 
 class MessagePatch(BaseModel):
@@ -118,9 +123,17 @@ CARD_LABELS = [
 INTERNAL_CARD_KEYS = {"icon", "bare", "no_narration"}
 
 
-def _compose_system(character: dict[str, Any], memory: dict[str, str]) -> str:
+def _compose_system(
+    character: dict[str, Any],
+    memory: dict[str, str],
+    members: list[dict[str, Any]] | None = None,
+) -> str:
     # DRIFT の 4 層メモリ + カード項目をラベル付き日本語セクションとして結合する。
     # サイズ管理は将来の要約ジョブ (priority=low) で行う前提で今は単純結合。
+    members = members or []
+    if members:
+        return _compose_group_system(character, members, memory)
+
     parts: list[str] = []
     if character.get("system_prompt"):
         parts.append(character["system_prompt"].strip())
@@ -149,6 +162,55 @@ def _compose_system(character: dict[str, Any], memory: dict[str, str]) -> str:
     return "\n\n".join(parts).strip()
 
 
+# グループチャット時に 1 キャラの簡潔なプロフィールブロックを作る。
+# 単体用 _compose_system の全情報を流し込むとトークン爆発するので、
+# 人格に最も効く 4 項目 (description/personality/first_person/user_address) + 名前に絞る。
+_GROUP_PROFILE_KEYS = [
+    ("description", "人物"),
+    ("personality", "性格"),
+    ("first_person", "一人称"),
+    ("user_address", "ユーザの呼び方"),
+]
+
+
+def _compose_member_block(character: dict[str, Any]) -> str:
+    name = (character.get("name") or "").strip() or "(名無し)"
+    card = character.get("card") or {}
+    lines = [f"- 名前: {name}"]
+    for key, label in _GROUP_PROFILE_KEYS:
+        v = card.get(key)
+        if isinstance(v, str) and v.strip():
+            lines.append(f"  {label}: {v.strip()}")
+    sp = (character.get("system_prompt") or "").strip()
+    if sp:
+        lines.append(f"  補足: {sp}")
+    return "\n".join(lines)
+
+
+def _compose_group_system(
+    primary: dict[str, Any],
+    members: list[dict[str, Any]],
+    memory: dict[str, str],
+) -> str:
+    parts: list[str] = [
+        "このチャットは複数のキャラクターが参加するグループチャットである。",
+        "以下は登場人物一覧。",
+    ]
+    parts.append(_compose_member_block(primary))
+    for m in members:
+        parts.append(_compose_member_block(m))
+    parts.append(
+        "次のアシスタント発言は上記メンバーの中から文脈的に一人を選んで発話する。"
+        "発話の冒頭に `【モデル名】` を付ける。"
+        "二人以上が続けて話す場合は `【名前】セリフ` を行頭に置いて改行で区切る。"
+        "ユーザは `【...】` を付けず、そのまま人間として参加する。"
+    )
+    for layer_name, label in (("long", "長期記憶"), ("mid", "中期要約"), ("recent", "直近")):
+        if memory.get(layer_name):
+            parts.append(f"[{label}]\n{memory[layer_name]}")
+    return "\n\n".join(parts).strip()
+
+
 @router.post("/{convid}/messages")
 async def post_message(convid: str, body: PostMessage, request: Request) -> StreamingResponse:
     db = request.app.state.db
@@ -166,7 +228,12 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
 
     # 要約済みメッセージは mid レイヤに入っているので raw では再送しない。
     history = db.list_unsummarized_messages(convid)
-    system = _compose_system(character, db.get_memory(convid))
+    member_chars: list[dict[str, Any]] = []
+    for mid_ in conv.get("members") or []:
+        mc = db.get_character(mid_)
+        if mc is not None:
+            member_chars.append(mc)
+    system = _compose_system(character, db.get_memory(convid), member_chars)
     messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})
@@ -232,7 +299,41 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
 @router.patch("/{convid}")
 async def patch_conversation(convid: str, body: ConversationPatch, request: Request) -> dict[str, Any]:
     db = request.app.state.db
-    row = db.update_conversation_title(convid, body.title)
+    if db.get_conversation(convid) is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    if body.title is not None:
+        db.update_conversation_title(convid, body.title)
+    if body.members is not None:
+        _validate_members(db, body.members)
+        db.set_conversation_members(convid, body.members)
+    row = db.get_conversation(convid)
+    if row is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    return row
+
+
+def _validate_members(db: Any, members: list[str]) -> None:
+    seen: set[str] = set()
+    for mid in members:
+        if not isinstance(mid, str) or not mid:
+            raise HTTPException(status_code=400, detail="invalid member id")
+        if mid in seen:
+            raise HTTPException(status_code=400, detail=f"duplicate member: {mid}")
+        seen.add(mid)
+        if db.get_character(mid) is None:
+            raise HTTPException(status_code=404, detail=f"character not found: {mid}")
+
+
+@router.patch("/{convid}/members")
+async def patch_members(convid: str, body: MembersPatch, request: Request) -> dict[str, Any]:
+    db = request.app.state.db
+    conv = db.get_conversation(convid)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    # primary character を members に重複させない。LLM に二重プロフィールを見せても無駄。
+    filtered = [m for m in body.members if m != conv["character_id"]]
+    _validate_members(db, filtered)
+    row = db.set_conversation_members(convid, filtered)
     if row is None:
         raise HTTPException(status_code=404, detail="conversation not found")
     return row

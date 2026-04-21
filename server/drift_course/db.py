@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
   title        TEXT NOT NULL DEFAULT '',
   created_at   INTEGER NOT NULL,
-  updated_at   INTEGER NOT NULL
+  updated_at   INTEGER NOT NULL,
+  members_json TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS idx_conv_char ON conversations(character_id, updated_at DESC);
 
@@ -74,6 +75,13 @@ class Database:
         # idx_msg_unsummarized が summarized_at を参照するため executescript より前に入れる。
         try:
             self.conn.execute("ALTER TABLE messages ADD COLUMN summarized_at INTEGER")
+        except sqlite3.OperationalError:
+            pass
+        # 既存 DB にグループチャット用 members 列を足す。
+        try:
+            self.conn.execute(
+                "ALTER TABLE conversations ADD COLUMN members_json TEXT NOT NULL DEFAULT '[]'"
+            )
         except sqlite3.OperationalError:
             pass
         self.conn.executescript(SCHEMA)
@@ -168,11 +176,24 @@ class Database:
                 f"SELECT c.* FROM conversations c "
                 f"WHERE 1=1 {empty_filter} ORDER BY c.updated_at DESC"
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [_row_conversation(r) for r in rows]
 
     def get_conversation(self, convid: str) -> dict[str, Any] | None:
         r = self.conn.execute("SELECT * FROM conversations WHERE id=?", (convid,)).fetchone()
-        return dict(r) if r else None
+        return _row_conversation(r) if r else None
+
+    def set_conversation_members(
+        self, convid: str, member_ids: list[str]
+    ) -> dict[str, Any] | None:
+        cur = self.get_conversation(convid)
+        if cur is None:
+            return None
+        with self.tx() as c:
+            c.execute(
+                "UPDATE conversations SET members_json=?, updated_at=? WHERE id=?",
+                (json.dumps(member_ids, ensure_ascii=False), _now(), convid),
+            )
+        return self.get_conversation(convid)
 
     def delete_conversation(self, convid: str) -> bool:
         with self.tx() as c:
@@ -350,4 +371,17 @@ def _row_character(r: sqlite3.Row) -> dict[str, Any]:
         d["card"] = json.loads(d.pop("card_json") or "{}")
     except json.JSONDecodeError:
         d["card"] = {}
+    return d
+
+
+def _row_conversation(r: sqlite3.Row) -> dict[str, Any]:
+    d = dict(r)
+    raw = d.pop("members_json", None)
+    try:
+        members = json.loads(raw or "[]")
+        if not isinstance(members, list):
+            members = []
+    except json.JSONDecodeError:
+        members = []
+    d["members"] = [str(m) for m in members if isinstance(m, (str, int))]
     return d
