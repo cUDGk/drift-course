@@ -135,6 +135,14 @@ def _compose_system(
         return _compose_group_system(character, members, memory)
 
     parts: list[str] = []
+    # カード情報を「背景」として扱わせる基本指針。これを入れないと LLM がカード項目を
+    # 「常に主張すべきネタ」と誤認して、ユーザの話題を遮ってでもカードに書いてある
+    # 趣味/設定を持ち出し続ける (ユーザ体感の「固執」を生む)。
+    parts.append(
+        "以下はこのキャラクターの背景設定。人格として自然に滲ませる程度で使う。"
+        "こちらから話題を持ち出したり設定を逐一引用したりせず、ユーザの発言を最優先する。"
+        "同じ話題 (趣味・設定・経歴など) を連続で掘り下げ続けない。"
+    )
     if character.get("system_prompt"):
         parts.append(character["system_prompt"].strip())
     card = character.get("card") or {}
@@ -194,6 +202,8 @@ def _compose_group_system(
 ) -> str:
     parts: list[str] = [
         "このチャットは複数のキャラクターが参加するグループチャットである。",
+        "各キャラクターのプロフィールは背景設定として使い、こちらから話題を持ち出したり"
+        "設定を逐一引用したりしない。ユーザの発言を最優先し、同じ話題を連続で掘り下げない。",
         "以下は登場人物一覧。",
     ]
     parts.append(_compose_member_block(primary))
