@@ -213,6 +213,14 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
                 reply = "".join(accumulated)
                 if reply:
                     db.append_message(convid, "assistant", reply)
+                    # 初回ターンでタイトルが空ならユーザ発言の先頭 24 文字で自動命名。
+                    # 重い LLM 要約を呼ぶほどでもないので単純な切り詰めに倒す。
+                    cur = db.get_conversation(convid)
+                    if cur and not (cur.get("title") or "").strip():
+                        seed = body.content.strip().replace("\n", " ")
+                        title = seed[:24] + ("…" if len(seed) > 24 else "")
+                        if title:
+                            db.update_conversation_title(convid, title)
 
     return StreamingResponse(
         gen(),

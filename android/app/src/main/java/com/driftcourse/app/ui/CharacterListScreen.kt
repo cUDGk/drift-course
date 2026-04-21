@@ -101,6 +101,7 @@ fun CharacterListScreen(
                             character = c,
                             onOpen = { onOpenModel(c.id) },
                             onDelete = { vm.delete(c.id) },
+                            onCopy = { vm.copy(c.id) },
                         )
                     }
                 }
@@ -138,6 +139,7 @@ private fun CharacterRow(
     character: Character,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
+    onCopy: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Surface(
@@ -174,6 +176,13 @@ private fun CharacterRow(
                 )
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("複製") },
+                    onClick = {
+                        menuOpen = false
+                        onCopy()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text("削除") },
                     onClick = {

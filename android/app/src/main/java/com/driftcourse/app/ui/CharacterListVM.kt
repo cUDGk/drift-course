@@ -76,6 +76,22 @@ class CharacterListVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun copy(id: String) {
+        viewModelScope.launch {
+            val cfg = settings.flow.first()
+            currentUrl = cfg.url
+            currentToken = cfg.token
+            _error.value = null
+            try {
+                api.copyCharacter(id)
+                reload()
+            } catch (t: Throwable) {
+                Log.e("CharacterListVM", "copy failed", t)
+                _error.value = t.message ?: "複製に失敗しました"
+            }
+        }
+    }
+
     fun delete(id: String) {
         viewModelScope.launch {
             val cfg = settings.flow.first()

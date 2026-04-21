@@ -449,13 +449,13 @@ private fun ActionSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("コピー") }
-            TextButton(
-                onClick = {
-                    scope.launch { sheetState.hide() }.invokeOnCompletion { onEdit() }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("ここを編集") }
             if (target.role == "user") {
+                TextButton(
+                    onClick = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { onEdit() }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("ここを編集") }
                 TextButton(
                     onClick = {
                         scope.launch { sheetState.hide() }.invokeOnCompletion { onFork() }
@@ -537,10 +537,14 @@ private fun MessageListLocal(
     onItemTap: (Int) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    // ストリーム中の delta 毎に強制スクロールするとユーザが上にスクロールしても
+    // 毎回下に引き戻される & 再コンポーズでカクつく。ユーザが既に末尾付近に居る時だけ
+    // 追従する。animateScrollToItem は重いので instant scrollToItem に変更。
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
-        if (messages.isNotEmpty() && !selectionMode) {
-            listState.animateScrollToItem(messages.lastIndex)
-        }
+        if (messages.isEmpty() || selectionMode) return@LaunchedEffect
+        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        val atBottom = last >= messages.size - 2
+        if (atBottom) listState.scrollToItem(messages.lastIndex)
     }
     LazyColumn(
         state = listState,
@@ -648,10 +652,14 @@ private fun NoteListLocal(
     onItemTap: (Int) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    // ストリーム中の delta 毎に強制スクロールするとユーザが上にスクロールしても
+    // 毎回下に引き戻される & 再コンポーズでカクつく。ユーザが既に末尾付近に居る時だけ
+    // 追従する。animateScrollToItem は重いので instant scrollToItem に変更。
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
-        if (messages.isNotEmpty() && !selectionMode) {
-            listState.animateScrollToItem(messages.lastIndex)
-        }
+        if (messages.isEmpty() || selectionMode) return@LaunchedEffect
+        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        val atBottom = last >= messages.size - 2
+        if (atBottom) listState.scrollToItem(messages.lastIndex)
     }
     LazyColumn(
         state = listState,
@@ -835,7 +843,9 @@ private fun NoteSidedListLocal(
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
-        if (messages.isNotEmpty() && !selectionMode) listState.animateScrollToItem(messages.lastIndex)
+        if (messages.isEmpty() || selectionMode) return@LaunchedEffect
+        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        if (last >= messages.size - 2) listState.scrollToItem(messages.lastIndex)
     }
     LazyColumn(
         state = listState,

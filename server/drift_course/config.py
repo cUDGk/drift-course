@@ -51,9 +51,11 @@ class Settings(BaseSettings):
     # 自動要約 (mid レイヤ更新) の動作パラメータ。
     # 閾値は文字数/4 の荒いトークン見積もり。tokenizer を呼ばない。
     summarize_interval_s: float = 30.0
-    summarize_trigger_tokens: int = 3000
-    summarize_batch_tokens: int = 2000
-    summarize_keep_tokens: int = 1500
+    # 閾値を緩めに。要約が早すぎると直近の文脈を失って柔軟性が下がるため、
+    # ctx 8192 の余裕を見て 6000 (~24000 文字相当) で初めて発火させる。
+    summarize_trigger_tokens: int = 6000
+    summarize_batch_tokens: int = 1500
+    summarize_keep_tokens: int = 3500
     summarize_enabled: bool = True
 
 
