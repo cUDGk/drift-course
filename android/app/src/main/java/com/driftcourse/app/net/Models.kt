@@ -127,6 +127,8 @@ data class PostMessage(
     val temperature: Float = 0.7f,
     @SerialName("top_p") val topP: Float = 0.9f,
     @SerialName("max_tokens") val maxTokens: Int = 1024,
+    // 設定画面で入れた自分の名前。空なら送信しない。
+    @SerialName("user_name") val userName: String? = null,
 )
 
 @Serializable

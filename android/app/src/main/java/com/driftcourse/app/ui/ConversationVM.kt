@@ -156,10 +156,11 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
             _messages.value = _messages.value + userMsg + assistant
             _error.value = null
             _streaming.value = true
+            val uname = settings.userNameFlow.first().trim().ifEmpty { null }
             streamJob = launch {
                 val buf = StringBuilder()
                 try {
-                    sse.convMessage(id, PostMessage(content = trimmed)).collect { delta ->
+                    sse.convMessage(id, PostMessage(content = trimmed, userName = uname)).collect { delta ->
                         buf.append(delta)
                         updateLastAssistant(buf.toString())
                     }
@@ -220,7 +221,8 @@ class ConversationVM(app: Application) : AndroidViewModel(app) {
                 // convId は画面が新 VM を作って load するので触らない。
                 // 以下の stream は「新会話宛」に直接叩く。ストリーム完了時点では
                 // UI の messages state は新会話側 VM が別途所有する。
-                sse.convMessage(newConv.id, PostMessage(content = trimmed)).collect { /* ignore deltas */ }
+                val uname = settings.userNameFlow.first().trim().ifEmpty { null }
+                sse.convMessage(newConv.id, PostMessage(content = trimmed, userName = uname)).collect { /* ignore deltas */ }
             } catch (t: Throwable) {
                 Log.e("ConversationVM", "forkFrom failed", t)
                 _error.value = t.message ?: "分岐に失敗しました"

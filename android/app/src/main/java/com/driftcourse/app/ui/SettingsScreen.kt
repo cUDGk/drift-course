@@ -73,6 +73,7 @@ fun SettingsScreen(
 
     var url by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
+    var userName by remember { mutableStateOf("") }
     var loaded by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
 
@@ -83,6 +84,7 @@ fun SettingsScreen(
         val s = store.flow.first()
         url = s.url
         token = s.token
+        userName = store.userNameFlow.first()
         loaded = true
     }
 
@@ -140,6 +142,7 @@ fun SettingsScreen(
                 onClick = {
                     scope.launch {
                         store.save(url, token)
+                        store.saveUserName(userName)
                         status = "保存しました"
                     }
                 },
@@ -147,6 +150,16 @@ fun SettingsScreen(
             ) {
                 Text("設定を保存")
             }
+
+            Spacer(Modifier.size(4.dp))
+            SectionHeader("あなた")
+            OutlinedTextField(
+                value = userName,
+                onValueChange = { userName = it },
+                label = { Text("自分の名前 (AI が呼ぶ時に使う、空なら未指定)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             Spacer(Modifier.size(4.dp))
             SectionHeader("LLM モデル")

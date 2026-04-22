@@ -24,6 +24,7 @@ class PostMessage(BaseModel):
     temperature: float = 0.7
     top_p: float = 0.9
     max_tokens: int = 4096
+    user_name: str | None = None
 
 
 class MemoryPatch(BaseModel):
@@ -275,6 +276,10 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
     # 指名無し → メンバー 0 でソロ合成 (出題者のみ)。
     active_members = _filter_members_by_mentions(body.content, all_member_chars)
     system = _compose_system(character, db.get_memory(convid), active_members)
+    # ユーザ自身の名前が指定されていれば system の末尾に足す。
+    if body.user_name and body.user_name.strip():
+        suffix = f"[ユーザの名前]\n{body.user_name.strip()}"
+        system = (system + "\n\n" + suffix) if system else suffix
     messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})

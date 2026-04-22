@@ -109,12 +109,20 @@ class SettingsStore(context: Context) {
         }
     }
 
+    // ユーザ自身の名前 (AI が呼ぶ時に使う)。空ならサーバに送らない。
+    val userNameFlow: Flow<String> = ds.data.map { it[KEY_USER_NAME].orEmpty() }
+
+    suspend fun saveUserName(name: String) {
+        ds.edit { prefs -> prefs[KEY_USER_NAME] = name.trim() }
+    }
+
     companion object {
         private val KEY_URL = stringPreferencesKey("server_url")
         private val KEY_TOKEN = stringPreferencesKey("token")
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         private val KEY_BG_KIND = stringPreferencesKey("bg_kind")
         private val KEY_BG_VALUE = stringPreferencesKey("bg_value")
+        private val KEY_USER_NAME = stringPreferencesKey("user_name")
     }
 }
 
