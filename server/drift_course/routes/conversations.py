@@ -221,6 +221,34 @@ def _compose_group_system(
     return "\n\n".join(parts).strip()
 
 
+import re as _re
+
+# @<name> メンション抽出。前後を空白/改行/句読点で区切る (先頭/末尾も可)。
+# Unicode 名前に対応するため `\S+` をケチに使う (ASCII の @ 以外は何でも名前扱い)。
+_MENTION_RE = _re.compile(r"(?:^|[\s、。,.!?！？])@([^\s、。,.!?！？@]+)")
+
+
+def _filter_members_by_mentions(
+    user_content: str, all_members: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """ユーザ発言中の @<name> に一致する member だけ残す。
+    名前完全一致 or 部分一致 (`@理詰探偵` で `NPC: 理詰探偵` にもマッチ) を許容。
+    メンション無しなら空リスト (= 出題者だけでソロ合成に倒す)。"""
+    mentions = {m.group(1) for m in _MENTION_RE.finditer(user_content)}
+    if not mentions:
+        return []
+    kept: list[dict[str, Any]] = []
+    for m in all_members:
+        name = (m.get("name") or "").strip()
+        if not name:
+            continue
+        for mentioned in mentions:
+            if mentioned == name or mentioned in name or name in mentioned:
+                kept.append(m)
+                break
+    return kept
+
+
 @router.post("/{convid}/messages")
 async def post_message(convid: str, body: PostMessage, request: Request) -> StreamingResponse:
     db = request.app.state.db
@@ -238,12 +266,15 @@ async def post_message(convid: str, body: PostMessage, request: Request) -> Stre
 
     # 要約済みメッセージは mid レイヤに入っているので raw では再送しない。
     history = db.list_unsummarized_messages(convid)
-    member_chars: list[dict[str, Any]] = []
+    all_member_chars: list[dict[str, Any]] = []
     for mid_ in conv.get("members") or []:
         mc = db.get_character(mid_)
         if mc is not None:
-            member_chars.append(mc)
-    system = _compose_system(character, db.get_memory(convid), member_chars)
+            all_member_chars.append(mc)
+    # @指名されたメンバーだけを system プロンプトに載せる (コンテキスト分離)。
+    # 指名無し → メンバー 0 でソロ合成 (出題者のみ)。
+    active_members = _filter_members_by_mentions(body.content, all_member_chars)
+    system = _compose_system(character, db.get_memory(convid), active_members)
     messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})
