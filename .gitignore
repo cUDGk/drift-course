@@ -25,3 +25,7 @@ captures/
 ## Common
 .DS_Store
 Thumbs.db
+
+## Playwright 一時成果物
+.playwright-mcp/
+*.png
