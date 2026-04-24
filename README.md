@@ -110,6 +110,16 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 起動後、設定画面でサーバ URL (`http://<tailnet-or-lan-ip>:8787`) と Bearer トークンを入力。
 
+## 使い方
+
+1. **モデルをロード**: 「モデル一覧」タブから GGUF を選ぶ。選択時に `llama-server` が再起動され、以降のチャットはそのモデルで応答する。
+2. **キャラクタを作る**: 「モデル作成」タブで手動入力、または「AI と対話して作る」で会話から JSON を抽出してプリフィル。7 項目（名前 / 人物説明 / 性格 / 状況 / 初回挨拶 / 例会話 / 記憶）を編集できる。
+3. **会話を始める**: 「対話一覧」タブから新規作成。素のモデルを試したいだけなら「+」で即チャット、内部で匿名キャラが自動用意される。
+4. **ゴーストモード**: キャラ付きチャットで「保存しない」トグルを ON にすると、応答は返るが DB に残らない。
+5. **メモリ編集**: 会話ごとに 4 層（キャラ記憶 / 長期 / 中期 / 直近）を閲覧・編集可。要約ジョブが 30 秒周期で中期を更新する。
+
+LAN 外から使う場合は両端末に Tailscale を入れて、tailnet IP で直叩きする。
+
 ## 推論パラメータ
 
 [llm-exp-runbook](https://github.com/cUDGk/llm-exp-runbook) / [llm-exp-chatcache](https://github.com/cUDGk/llm-exp-chatcache) の実測を反映:
