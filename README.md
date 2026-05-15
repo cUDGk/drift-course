@@ -150,6 +150,7 @@ drift-course/
 │       └── routes/            health / models / characters / conversations / chat
 └── android/            — Kotlin / Jetpack Compose
     └── app/src/main/java/com/driftcourse/app/
+        ├── cache/             ファイルベースのオフラインキャッシュ (characters / conversations / messages)
         ├── net/               HTTP / SSE / DTO / システムプロンプト合成
         ├── settings/          DataStore (server_url, token)
         └── ui/                各画面 + ViewModel + テーマ
